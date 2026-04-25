@@ -1,0 +1,42 @@
+{
+  "businessName": "SmartFlow Demo Business",
+  "businessType": "AI automation studio",
+  "services": [
+    "AI automation",
+    "Telegram sales bot",
+    "Google Sheets CRM setup",
+    "Landing page",
+    "Marketing automation"
+  ],
+  "workingHours": {
+    "timezone": "Africa/Cairo",
+    "weekly": {
+      "Sunday": "10:00-18:00",
+      "Monday": "10:00-18:00",
+      "Tuesday": "10:00-18:00",
+      "Wednesday": "10:00-18:00",
+      "Thursday": "10:00-18:00"
+    }
+  },
+  "tone": "professional, concise, helpful",
+  "language": "ar",
+  "defaultCurrency": "EGP",
+  "unavailableDays": ["Friday", "Saturday"],
+  "adminContact": {
+    "name": "Sales Manager",
+    "phone": "+201000000000",
+    "email": "sales@example.com",
+    "telegram": "@smartflow_admin"
+  },
+  "qualificationQuestions": {
+    "serviceRequested": "ما الخدمة التي تحتاجها بالتحديد؟",
+    "budgetOrTimeline": "ما الميزانية المتوقعة أو الموعد المطلوب لتنفيذ الخدمة؟",
+    "phone": "هل يمكنك إرسال رقم هاتف أو طريقة تواصل مفضلة حتى يتابع معك المسؤول؟"
+  },
+  "forbiddenClaims": [
+    "Do not promise fixed prices before admin review.",
+    "Do not guarantee launch dates before admin approval.",
+    "Do not confirm bookings or appointments automatically."
+  ],
+  "fallbackReply": "شكرا لتواصلك معنا. سأجمع بعض التفاصيل السريعة حتى أساعدك بشكل أفضل."
+}

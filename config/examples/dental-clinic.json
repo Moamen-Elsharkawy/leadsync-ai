@@ -1,0 +1,45 @@
+{
+  "businessName": "Pearl Smile Dental Center",
+  "businessType": "dental clinic",
+  "services": [
+    "كشف واستشارة أسنان",
+    "تنظيف وتلميع الأسنان",
+    "تبييض الأسنان",
+    "زراعة الأسنان",
+    "تقويم الأسنان",
+    "استفسار طوارئ الأسنان"
+  ],
+  "workingHours": {
+    "timezone": "Africa/Cairo",
+    "weekly": {
+      "Saturday": "12:00-20:00",
+      "Sunday": "12:00-20:00",
+      "Monday": "12:00-20:00",
+      "Tuesday": "12:00-20:00",
+      "Wednesday": "12:00-20:00"
+    }
+  },
+  "tone": "warm, reassuring, concise, professional",
+  "language": "ar",
+  "defaultCurrency": "EGP",
+  "unavailableDays": ["Thursday", "Friday"],
+  "adminContact": {
+    "name": "Clinic Reception",
+    "phone": "+201011111111",
+    "email": "reception@example-dental.com",
+    "telegram": "@pearl_smile_reception"
+  },
+  "qualificationQuestions": {
+    "serviceRequested": "ما خدمة الأسنان التي تحتاجها؟ كشف، تنظيف، تبييض، زراعة، تقويم، أم استفسار طوارئ؟",
+    "budgetOrTimeline": "هل ترغب في زيارة قريبة أم لديك وقت محدد يناسبك؟",
+    "phone": "هل يمكنك إرسال رقم هاتف حتى يتواصل معك فريق الاستقبال لتأكيد التفاصيل؟"
+  },
+  "forbiddenClaims": [
+    "Do not provide medical diagnosis.",
+    "Do not guarantee treatment results.",
+    "Do not confirm appointment availability before admin approval.",
+    "Do not quote final medical prices before clinic review.",
+    "Do not recommend medication or treatment plans."
+  ],
+  "fallbackReply": "شكرا لتواصلك مع Pearl Smile Dental Center. سأجمع بعض التفاصيل البسيطة ليتمكن فريق الاستقبال من مساعدتك بدون تأكيد موعد أو سعر نهائي قبل المراجعة."
+}
