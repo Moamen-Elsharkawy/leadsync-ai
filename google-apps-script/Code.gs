@@ -155,6 +155,18 @@ function doPost(e) {
         return jsonResponse({ ok: true, data: listLeadsByStatus("Warm") });
       case "listColdLeads":
         return jsonResponse({ ok: true, data: listLeadsByStatus("Cold") });
+      case "listMessages":
+        return jsonResponse({ ok: true, data: listMessages(payload || {}) });
+      case "listMessagesByLead":
+        return jsonResponse({
+          ok: true,
+          data: listMessages({ leadId: payload.leadId })
+        });
+      case "listMessagesByTelegramUser":
+        return jsonResponse({
+          ok: true,
+          data: listMessages({ telegramUserId: payload.telegramUserId })
+        });
       case "appendFollowUp":
         return jsonResponse({
           ok: true,
@@ -162,6 +174,18 @@ function doPost(e) {
         });
       case "listFollowUps":
         return jsonResponse({ ok: true, data: listFollowUps(payload.status) });
+      case "listSettings":
+        return jsonResponse({ ok: true, data: listObjects("Settings") });
+      case "upsertSetting":
+        return jsonResponse({
+          ok: true,
+          data: upsertByKey("Settings", "key", {
+            key: payload.key,
+            value: payload.value
+          })
+        });
+      case "getDashboardData":
+        return jsonResponse({ ok: true, data: getDashboardData() });
       case "updateFollowUp":
         return jsonResponse({
           ok: true,
@@ -301,6 +325,28 @@ function listLeadsByStatus(status) {
   });
 }
 
+function listMessages(filters) {
+  var messages = listObjects("Messages");
+  var leadId = filters && filters.leadId ? String(filters.leadId) : "";
+  var telegramUserId =
+    filters && filters.telegramUserId ? String(filters.telegramUserId) : "";
+
+  return messages.filter(function (message) {
+    if (leadId && String(message.leadId) !== leadId) {
+      return false;
+    }
+
+    if (
+      telegramUserId &&
+      String(message.telegramUserId) !== telegramUserId
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
 function listFollowUps(status) {
   var followUps = listObjects("FollowUps");
 
@@ -361,6 +407,17 @@ function getReportSummary() {
   }
 
   return summary;
+}
+
+function getDashboardData() {
+  return {
+    leads: listObjects("Leads"),
+    messages: listObjects("Messages"),
+    followUps: listObjects("FollowUps"),
+    reports: listObjects("Reports"),
+    settings: listObjects("Settings"),
+    summary: getReportSummary()
+  };
 }
 
 function seedDemoData(preset) {
@@ -684,6 +741,10 @@ function normalizeDemoPreset(preset) {
     return "online-course";
   }
 
+  if (value === "physio" || value === "physical-therapy") {
+    return "physical-therapy";
+  }
+
   return "custom";
 }
 
@@ -694,6 +755,10 @@ function getDemoLeadsForPreset(preset) {
 
   if (preset === "online-course") {
     return getOnlineCourseDemoLeads();
+  }
+
+  if (preset === "physical-therapy") {
+    return getPhysicalTherapyDemoLeads();
   }
 
   return [];
@@ -708,6 +773,12 @@ function seedPresetDemoData(preset, demoLeads) {
 
   demoLeads.forEach(function (demoLead) {
     var leadId = "lead_demo_" + prefix + "_" + demoLead.id;
+    var createdAt =
+      demoLead.createdAt ||
+      new Date(
+        Date.now() - Number(demoLead.createdAtOffsetDays || 0) * 24 * 60 * 60 * 1000
+      ).toISOString();
+    var updatedAt = demoLead.updatedAt || now;
     var rawMessages = demoLead.messages
       .filter(function (message) {
         return message.direction === "inbound";
@@ -736,8 +807,8 @@ function seedPresetDemoData(preset, demoLeads) {
       lastQuestionAsked: "",
       notes: demoLead.notes,
       rawMessages: JSON.stringify(rawMessages),
-      createdAt: now,
-      updatedAt: now,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
       followUpCount: 0,
       nextFollowUpAt: nextFollowUpAt,
       isDemo: true
@@ -756,9 +827,9 @@ function seedPresetDemoData(preset, demoLeads) {
         notes: demoLead.notes
       }),
       lastQuestionAsked: "",
-      lastMessageAt: now,
-      createdAt: now,
-      updatedAt: now,
+      lastMessageAt: updatedAt,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
       isDemo: true
     });
 
@@ -771,7 +842,9 @@ function seedPresetDemoData(preset, demoLeads) {
         telegramUserId: demoLead.telegramUserId,
         direction: message.direction,
         text: message.text,
-        createdAt: now,
+        createdAt:
+          message.createdAt ||
+          new Date(new Date(createdAt).getTime() + messageIndex * 4 * 60 * 1000).toISOString(),
         isDemo: true
       });
     });
@@ -1230,6 +1303,215 @@ function getOnlineCourseDemoLeads() {
         { direction: "inbound", text: "بتبيعوا لابتوبات أو سماعات؟" },
         { direction: "outbound", text: "نحن أكاديمية تدريب أونلاين. هل تبحث عن كورس أو استشارة تعليمية؟" },
         { direction: "inbound", text: "لا خلاص شكرا." }
+      ]
+    }
+  ];
+}
+
+function getPhysicalTherapyDemoLeads() {
+  return [
+    {
+      id: "001",
+      createdAtOffsetDays: 1,
+      telegramUserId: "demo_physio_1001",
+      telegramUsername: "@movewell_ahmed",
+      fullName: "Ahmed Fathy",
+      phone: "+201044440001",
+      serviceRequested: "Back pain physiotherapy",
+      budget: "800-1200 EGP",
+      timeline: "tomorrow",
+      location: "Nasr City Branch",
+      status: "Hot",
+      leadScore: 92,
+      notes: "Lower back pain inquiry for Nasr City. Staff should handle medical intake; no diagnosis requested or provided.",
+      messages: [
+        { direction: "inbound", text: "مساء الخير، محتاج جلسة علاج طبيعي لأسفل الظهر في فرع مدينة نصر بكرة لو ينفع." },
+        { direction: "outbound", text: "أهلا أستاذ أحمد، سلامتك. أقدر أسجل طلبك للاستقبال بدون تشخيص داخل المحادثة. هل يوجد رقم للتواصل؟" },
+        { direction: "inbound", text: "رقمي 01044440001، وميزانيتي حوالي ٨٠٠ إلى ١٢٠٠ جنيه." }
+      ]
+    },
+    {
+      id: "002",
+      createdAtOffsetDays: 3,
+      telegramUserId: "demo_physio_1002",
+      telegramUsername: "@movewell_menna",
+      fullName: "Menna Adel",
+      phone: "+201044440002",
+      serviceRequested: "Post-surgery rehabilitation",
+      budget: "",
+      timeline: "this week",
+      location: "Maadi Branch",
+      status: "Hot",
+      leadScore: 88,
+      notes: "Post-ACL surgery rehabilitation inquiry. Needs staff call before any plan or session estimate.",
+      messages: [
+        { direction: "inbound", text: "أنا عاملة عملية رباط صليبي ومحتاجة متابعة علاج طبيعي في المعادي الأسبوع ده." },
+        { direction: "outbound", text: "سلامتك يا أستاذة منة. سننقل التفاصيل للفريق المختص بدون تحديد خطة علاج هنا. ما رقم التواصل المناسب؟" },
+        { direction: "inbound", text: "01044440002، ياريت حد يكلمني النهارده." }
+      ]
+    },
+    {
+      id: "003",
+      createdAtOffsetDays: 5,
+      telegramUserId: "demo_physio_1003",
+      telegramUsername: "@movewell_karim",
+      fullName: "Karim Hassan",
+      phone: "+201044440003",
+      serviceRequested: "Sports injury rehabilitation",
+      budget: "1000 EGP per visit if suitable",
+      timeline: "today",
+      location: "New Cairo Branch",
+      status: "Hot",
+      leadScore: 86,
+      notes: "Football sports injury rehab inquiry. Asked for appointment/call; no treatment advice provided.",
+      messages: [
+        { direction: "inbound", text: "اتصبت في ماتش كورة وعايز أعرف أقدر أحجز كشف علاج طبيعي في التجمع النهارده؟" },
+        { direction: "outbound", text: "سلامتك. أقدر أسجل طلبك للفريق للتواصل وتأكيد المتاح، بدون تأكيد موعد الآن. ما رقمك؟" },
+        { direction: "inbound", text: "01044440003، والميزانية حوالي ألف جنيه للزيارة لو مناسب." }
+      ]
+    },
+    {
+      id: "004",
+      createdAtOffsetDays: 7,
+      telegramUserId: "demo_physio_1004",
+      telegramUsername: "@movewell_sara",
+      fullName: "Sara Nabil",
+      phone: "+201044440004",
+      serviceRequested: "Home physiotherapy session",
+      budget: "1500 EGP",
+      timeline: "within two days",
+      location: "Heliopolis",
+      status: "Hot",
+      leadScore: 84,
+      notes: "Home physiotherapy request for Heliopolis. Staff must confirm coverage and availability.",
+      messages: [
+        { direction: "inbound", text: "ممكن جلسة علاج طبيعي في البيت لوالدتي في مصر الجديدة خلال يومين؟" },
+        { direction: "outbound", text: "أهلا أستاذة سارة. ممكن أسجل طلب زيارة منزلية للفريق لتأكيد التغطية والمتاح. ما رقم التواصل؟" },
+        { direction: "inbound", text: "01044440004، الميزانية حوالي ١٥٠٠ جنيه." }
+      ]
+    },
+    {
+      id: "005",
+      createdAtOffsetDays: 9,
+      telegramUserId: "demo_physio_1005",
+      telegramUsername: "@movewell_nour",
+      fullName: "Nour Samir",
+      phone: "+201044440005",
+      serviceRequested: "Neck pain physiotherapy",
+      budget: "",
+      timeline: "next week",
+      location: "Nasr City Branch",
+      status: "Warm",
+      leadScore: 67,
+      notes: "Neck pain inquiry, interested but budget not shared.",
+      followUpMessage: "أهلا أستاذة نور، هل ما زلت ترغبين في أن يتواصل معك فريق MoveWell بخصوص استشارة الرقبة في فرع مدينة نصر؟",
+      messages: [
+        { direction: "inbound", text: "عندي وجع في الرقبة من الشغل وعايزة أعرف تفاصيل الجلسات في مدينة نصر." },
+        { direction: "outbound", text: "سلامتك. أقدر أسجل استفسارك للفريق بدون تشخيص أو نصيحة علاجية هنا. متى يناسبك التواصل؟" },
+        { direction: "inbound", text: "الأسبوع الجاي مناسب، رقمي 01044440005." }
+      ]
+    },
+    {
+      id: "006",
+      createdAtOffsetDays: 10,
+      telegramUserId: "demo_physio_1006",
+      telegramUsername: "@movewell_price",
+      fullName: "",
+      phone: "",
+      serviceRequested: "Manual therapy inquiry",
+      budget: "",
+      timeline: "",
+      location: "",
+      status: "Warm",
+      leadScore: 54,
+      notes: "Price-only manual therapy inquiry. Needs service and branch clarification.",
+      followUpMessage: "أهلا، هل تحب توضح الفرع أو نوع الاستشارة المطلوبة حتى يراجع فريق MoveWell التفاصيل معك؟",
+      messages: [
+        { direction: "inbound", text: "كام سعر جلسة المانيوال؟" },
+        { direction: "outbound", text: "الأسعار النهائية يراجعها فريق الاستقبال حسب الخدمة والفرع. هل تبحث عن فرع مدينة نصر، المعادي، أم التجمع؟" },
+        { direction: "inbound", text: "لسه بشوف الأسعار بس." }
+      ]
+    },
+    {
+      id: "007",
+      createdAtOffsetDays: 11,
+      telegramUserId: "demo_physio_1007",
+      telegramUsername: "@movewell_mahmoud",
+      fullName: "Mahmoud Tarek",
+      phone: "+201044440007",
+      serviceRequested: "Knee pain treatment",
+      budget: "",
+      timeline: "soon",
+      location: "nearest branch",
+      status: "Warm",
+      leadScore: 63,
+      notes: "Asked for nearest branch and knee pain intake. Branch preference still needs confirmation.",
+      followUpMessage: "أهلا أستاذ محمود، هل تفضل فرع مدينة نصر، المعادي، أم التجمع حتى يوجه فريق MoveWell طلبك؟",
+      messages: [
+        { direction: "inbound", text: "عندي مشكلة في الركبة وعايز أعرف أقرب فرع ليكم." },
+        { direction: "outbound", text: "سلامتك. لدينا فروع مدينة نصر والمعادي والتجمع. ما المنطقة الأقرب لك ورقم التواصل؟" },
+        { direction: "inbound", text: "أنا قريب من التجمع، ورقمي 01044440007." }
+      ]
+    },
+    {
+      id: "008",
+      createdAtOffsetDays: 13,
+      telegramUserId: "demo_physio_1008",
+      telegramUsername: "@movewell_laila",
+      fullName: "Laila Mostafa",
+      phone: "+201044440008",
+      serviceRequested: "Shoulder rehabilitation",
+      budget: "not sure yet",
+      timeline: "tomorrow",
+      location: "Maadi Branch",
+      status: "Hot",
+      leadScore: 82,
+      notes: "Urgent shoulder rehab inquiry for tomorrow. Staff should confirm availability.",
+      messages: [
+        { direction: "inbound", text: "محتاجة أروح بكرة لكتفي في فرع المعادي، ينفع حد يكلمني؟" },
+        { direction: "outbound", text: "سلامتك أستاذة ليلى. أقدر أنقل طلبك للفريق لتأكيد المتاح بدون تأكيد موعد الآن. ما رقمك؟" },
+        { direction: "inbound", text: "01044440008، الميزانية لسه مش محددة." }
+      ]
+    },
+    {
+      id: "009",
+      createdAtOffsetDays: 14,
+      telegramUserId: "demo_physio_1009",
+      telegramUsername: "@movewell_peds",
+      fullName: "Dina Ashraf",
+      phone: "+201044440009",
+      serviceRequested: "Pediatric physiotherapy consultation",
+      budget: "",
+      timeline: "this month",
+      location: "New Cairo Branch",
+      status: "Warm",
+      leadScore: 61,
+      notes: "Pediatric consultation inquiry. Needs careful staff intake before any advice.",
+      followUpMessage: "أهلا أستاذة دينا، هل ترغبين في أن يتواصل معك فريق MoveWell لتسجيل استشارة الأطفال في فرع التجمع؟",
+      messages: [
+        { direction: "inbound", text: "بسأل عن استشارة علاج طبيعي لطفل في فرع التجمع، ممكن التفاصيل؟" },
+        { direction: "outbound", text: "أهلا أستاذة دينا. يمكن للفريق تسجيل بيانات الحالة وتوجيهك بدون تقديم نصيحة علاجية في المحادثة. ما رقم التواصل؟" },
+        { direction: "inbound", text: "01044440009، غالبا هذا الشهر." }
+      ]
+    },
+    {
+      id: "010",
+      createdAtOffsetDays: 6,
+      telegramUserId: "demo_physio_1010",
+      telegramUsername: "@movewell_vague",
+      fullName: "",
+      phone: "",
+      serviceRequested: "",
+      budget: "",
+      timeline: "",
+      location: "",
+      status: "Cold",
+      leadScore: 22,
+      notes: "Vague inquiry without service, branch, timing, or contact details.",
+      messages: [
+        { direction: "inbound", text: "عايز اعرف التفاصيل" },
+        { direction: "outbound", text: "أكيد. ما نوع استشارة العلاج الطبيعي التي تحتاجها، وأي فرع يناسبك: مدينة نصر، المعادي، أم التجمع؟" },
+        { direction: "inbound", text: "لسه مش محدد." }
       ]
     }
   ];

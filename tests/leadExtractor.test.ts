@@ -27,6 +27,28 @@ const businessConfig: BusinessConfig = {
   forbiddenClaims: [],
 };
 
+const physicalTherapyConfig: BusinessConfig = {
+  ...businessConfig,
+  businessName: "MoveWell Physical Therapy Centers",
+  businessType: "physical therapy center",
+  services: [
+    "Back pain physiotherapy",
+    "Neck pain physiotherapy",
+    "Sports injury rehabilitation",
+    "Post-surgery rehabilitation",
+    "Knee pain treatment",
+    "Shoulder rehabilitation",
+    "Home physiotherapy session",
+    "Pediatric physiotherapy consultation",
+    "Posture correction",
+    "Manual therapy inquiry",
+  ],
+  forbiddenClaims: [
+    "Do not diagnose medical conditions.",
+    "Do not provide treatment advice.",
+  ],
+};
+
 describe("leadExtractor", () => {
   it("parses valid structured AI JSON content", () => {
     const result = parseLeadExtractionContent(
@@ -69,6 +91,28 @@ describe("leadExtractor", () => {
     expect(result.budget).toContain("15000");
     expect(result.phone).toContain("01012345678");
     expect(result.intent).toBe("asking");
+  });
+
+  it("extracts physical therapy intake without medical advice", async () => {
+    const client = {
+      generateJson: vi.fn().mockResolvedValue({ ok: false }),
+      generateText: vi.fn(),
+    } as unknown as OpenRouterClient;
+
+    const result = await extractLeadInfo({
+      client,
+      messageText:
+        "محتاج جلسة علاج طبيعي لأسفل الظهر في فرع مدينة نصر بكرة. رقمي 01044440001",
+      existingFields: {},
+      businessConfig: physicalTherapyConfig,
+    });
+
+    expect(result.source).toBe("fallback");
+    expect(result.merged.serviceRequested).toBe("Back pain physiotherapy");
+    expect(result.merged.timeline).toBe("بكرة");
+    expect(result.merged.location).toContain("فرع مدينة نصر");
+    expect(result.merged.phone).toBe("01044440001");
+    expect(result.merged.notes).not.toMatch(/تشخيص|تمارين|جلسات لازمة/u);
   });
 
   it("merges new fields without deleting existing values", () => {

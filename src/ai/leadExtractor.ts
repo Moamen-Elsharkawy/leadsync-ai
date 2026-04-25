@@ -124,7 +124,7 @@ export function fallbackExtractLeadData(messageText: string): LeadFields {
   );
   const budget = firstMatch(
     messageText,
-    /(?:\$|usd|egp|جنيه|دولار)?\s?\d[\d,. ]{2,}\s?(?:\$|usd|egp|جنيه|دولار|k|الف|ألف)?/iu,
+    /(?:\$|usd|egp|جنيه|دولار)?\s?\d[\d,. ]{2,}\s?(?:\$|usd|egp|جنيه|دولار|k|الف|ألف|آلاف)?/iu,
   );
   const fullName =
     firstMatch(
@@ -160,6 +160,7 @@ function buildExtractionPrompts(options: LeadExtractionOptions): {
       'Each field except intent must be a string or null. intent must be one of: "buying", "asking", "support", "irrelevant", "unknown".',
       "Extract only what the customer actually said. Never invent prices, guarantees, discounts, deadlines, availability, names, phone numbers, or booking confirmations.",
       "serviceRequested must match one item from the configured services list when possible. If the requested service is not in the configured list, set serviceRequested to null and mention it in notes.",
+      "For medical or therapy businesses, do not diagnose, give treatment advice, recommend exercises, promise outcomes, or estimate session counts.",
       "If a field is implied but not explicit, keep it null and mention the uncertainty in notes.",
     ].join(" "),
     userPrompt: JSON.stringify({
@@ -171,16 +172,16 @@ function buildExtractionPrompts(options: LeadExtractionOptions): {
       examples: [
         {
           input:
-            "I need a Telegram sales bot this week. Budget around 15000 EGP. My number is 01012345678.",
+            "محتاج جلسة علاج طبيعي للظهر في فرع مدينة نصر بكرة. رقمي 01012345678.",
           output: {
             fullName: null,
             phone: "01012345678",
-            serviceRequested: "Telegram sales bot",
-            budget: "15000 EGP",
-            timeline: "this week",
-            location: null,
+            serviceRequested: "Back pain physiotherapy",
+            budget: null,
+            timeline: "بكرة",
+            location: "مدينة نصر",
             notes:
-              "Customer wants a Telegram sales bot and shared budget and phone.",
+              "Customer wants back pain physiotherapy and shared branch, timing, and phone.",
             intent: "buying",
           },
         },
@@ -308,8 +309,8 @@ function firstMatch(
 
 function extractTimeline(messageText: string): string | undefined {
   const patterns = [
-    /(?:اليوم|حالا|حالاً|عاجل|urgent|asap)/iu,
-    /(?:هذا الاسبوع|هذا الأسبوع|اسبوع|أسبوع|week)/iu,
+    /(?:اليوم|النهارده|حالا|حالاً|عاجل|بكرة|urgent|asap|today|tomorrow)/iu,
+    /(?:هذا الاسبوع|هذا الأسبوع|الأسبوع ده|اسبوع|أسبوع|week)/iu,
     /(?:شهر|month|30 days|٣٠ يوم|30 يوم)/iu,
     /(?:next month|الشهر القادم|الشهر الجاي)/iu,
   ];
@@ -333,13 +334,36 @@ function extractLocation(messageText: string): string | undefined {
     ) ??
     firstMatch(
       messageText,
-      /(?:القاهرة|الجيزة|الإسكندرية|alexandria|cairo|giza)/iu,
+      /(?:مدينة نصر|المعادي|التجمع|القاهرة|الجيزة|الإسكندرية|alexandria|cairo|giza|nasr city|maadi|new cairo)/iu,
     )
   );
 }
 
 function extractService(messageText: string): string | undefined {
   const services: Array<[RegExp, string]> = [
+    [
+      /(?:أسفل الظهر|الظهر|ضهر|ظهر|back pain|lower back)/iu,
+      "Back pain physiotherapy",
+    ],
+    [/(?:الرقبة|رقبة|neck pain|neck)/iu, "Neck pain physiotherapy"],
+    [
+      /(?:إصابة ملاعب|اصابة ملاعب|رياض|كورة|كرة|football|sports injury)/iu,
+      "Sports injury rehabilitation",
+    ],
+    [
+      /(?:رباط صليبي|acl|بعد عملية|بعد العملية|جراحة|surgery|post-surgery|post surgery)/iu,
+      "Post-surgery rehabilitation",
+    ],
+    [/(?:ركبة|knee)/iu, "Knee pain treatment"],
+    [/(?:كتف|shoulder)/iu, "Shoulder rehabilitation"],
+    [
+      /(?:جلسة منزلية|زيارة منزلية|في البيت|home physiotherapy|home session)/iu,
+      "Home physiotherapy session",
+    ],
+    [/(?:أطفال|طفل|pediatric|kids)/iu, "Pediatric physiotherapy consultation"],
+    [/(?:قوام|posture|انحناء|وضعية)/iu, "Posture correction"],
+    [/(?:مانيوال|يدوي|manual therapy)/iu, "Manual therapy inquiry"],
+    [/(?:علاج طبيعي|فيزيو|physio|physiotherapy)/iu, "Back pain physiotherapy"],
     [/(?:زراعة|زرع|implant|implants)/iu, "زراعة الأسنان"],
     [/(?:تبييض|whitening)/iu, "تبييض الأسنان"],
     [/(?:تنظيف|تلميع|cleaning|polishing)/iu, "تنظيف وتلميع الأسنان"],
@@ -357,7 +381,7 @@ function extractService(messageText: string): string | undefined {
       "استشارة اختيار مسار التعلم",
     ],
     [/(?:telegram|تيليجرام|تلجرام|بوت)/iu, "Telegram bot"],
-    [/(?:طوارئ|ألم|emergency)/iu, "استفسار طوارئ الأسنان"],
+    [/(?:طوارئ|ألم ضرس|emergency)/iu, "استفسار طوارئ الأسنان"],
     [/(?:automation|اوتوميشن|أتمتة|اتمتة)/iu, "AI automation"],
     [/(?:crm|عملاء|مبيعات)/iu, "CRM setup"],
     [/(?:website|web site|موقع|landing page)/iu, "Website"],
@@ -373,7 +397,7 @@ function extractService(messageText: string): string | undefined {
 
   return firstMatch(
     messageText,
-    /(?:احتاج|أحتاج|عايز|عاوز|need|want)\s+([^\n،,.]{3,80})/iu,
+    /(?:احتاج|أحتاج|عايز|عاوز|محتاج|need|want)\s+([^\n،,.]{3,80})/iu,
     1,
   );
 }
@@ -392,11 +416,11 @@ function extractIntent(messageText: string): LeadIntent {
   }
 
   if (
-    /(?:buy|start|book|call|quote|price|cost|demo|need|want|urgent|asap|اشتري|ابدأ|احجز|سعر|تكلفة|عرض سعر|محتاج|عايز)/iu.test(
+    /(?:buy|start|book|call|quote|price|cost|demo|need|want|urgent|asap|اشتري|ابدأ|احجز|سعر|تكلفة|عرض سعر|محتاج|عايز|موعد|زيارة)/iu.test(
       messageText,
     )
   ) {
-    return /(?:book|call|quote|start|urgent|asap|buy|احجز|اتصال|مكالمة|عرض سعر|ابدأ|عاجل)/iu.test(
+    return /(?:book|call|quote|start|urgent|asap|buy|احجز|اتصال|مكالمة|عرض سعر|ابدأ|عاجل|بكرة|النهارده)/iu.test(
       messageText,
     )
       ? "buying"

@@ -207,6 +207,79 @@ describe("SheetsWebAppClient", () => {
     expect(body.payload).toEqual({ preset: "online-course" });
   });
 
+  it("passes physical therapy preset when seeding demo data", async () => {
+    const fetchMock = mockFetchResponse({
+      seeded: true,
+      preset: "physical-therapy",
+      createdLeads: 10,
+      createdMessages: 30,
+    });
+    const client = new SheetsWebAppClient({
+      webAppUrl: "https://script.google.com/macros/s/test/exec",
+      secret: "shared-secret",
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    await client.seedDemoData("physical-therapy");
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
+
+    expect(body.payload).toEqual({ preset: "physical-therapy" });
+  });
+
+  it("lists messages with dashboard filters through Apps Script", async () => {
+    const fetchMock = mockFetchResponse([
+      {
+        messageId: "msg_1",
+        leadId: "lead_1",
+        telegramUserId: "123",
+        direction: "inbound",
+        text: "hello",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+    const client = new SheetsWebAppClient({
+      webAppUrl: "https://script.google.com/macros/s/test/exec",
+      secret: "shared-secret",
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    const messages = await client.listMessages({ leadId: "lead_1" });
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
+
+    expect(messages).toHaveLength(1);
+    expect(body).toEqual({
+      action: "listMessages",
+      secret: "shared-secret",
+      payload: { leadId: "lead_1" },
+    });
+  });
+
+  it("parses dashboard data responses", async () => {
+    const fetchMock = mockFetchResponse({
+      leads: [],
+      messages: [],
+      followUps: [],
+      reports: [],
+      settings: [{ key: "timezone", value: "Africa/Cairo" }],
+      summary: {
+        totalLeads: 0,
+        hotLeads: 0,
+        warmLeads: 0,
+        coldLeads: 0,
+      },
+    });
+    const client = new SheetsWebAppClient({
+      webAppUrl: "https://script.google.com/macros/s/test/exec",
+      secret: "shared-secret",
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    await expect(client.getDashboardData()).resolves.toMatchObject({
+      settings: [{ key: "timezone", value: "Africa/Cairo" }],
+      summary: { totalLeads: 0 },
+    });
+  });
+
   it("logs failures without leaking the shared secret", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const fetchMock = vi

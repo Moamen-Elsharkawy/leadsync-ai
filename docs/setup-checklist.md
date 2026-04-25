@@ -42,21 +42,29 @@ Use this checklist before running the bot against real Telegram, OpenRouter, or 
 - Run `npm run init:secret` once after deploying the Apps Script Web App.
 - Run `npm run setup:sheets` to create or verify tabs and headers.
 
-## 6. Admin Dashboard
+## 6. Legacy Express Admin Dashboard
 
 - Set `ADMIN_PORT`, usually `3000`.
 - Set `ADMIN_PASSWORD` to a private dashboard password.
 - Open `http://localhost:3000/dashboard?password=YOUR_PASSWORD` after starting the app.
 
-## 7. Demo Mode
+## 7. Professional Web Dashboard
 
-- Set `BUSINESS_PRESET=custom`, `BUSINESS_PRESET=dental-clinic`, or `BUSINESS_PRESET=online-course`.
-- Use `dental-clinic` for the Dental Clinic demo and `online-course` for the Online Course demo.
+- Confirm `ADMIN_PASSWORD` is set in `.env`.
+- Optional: set `DASHBOARD_SECRET` for cookie signing.
+- Run `npm --prefix apps/dashboard install` once.
+- Run `npm run dashboard:dev`.
+- Open `http://localhost:3001/login`.
+
+## 8. Demo Mode
+
+- Set `BUSINESS_PRESET=custom`, `BUSINESS_PRESET=physical-therapy`, `BUSINESS_PRESET=dental-clinic`, or `BUSINESS_PRESET=online-course`.
+- Use `physical-therapy` for the MoveWell demo, `dental-clinic` for the Dental Clinic demo, and `online-course` for the Online Course demo.
 - Set `DEMO_MODE=true` for portfolio demos.
 - Set `DEMO_MODE=false` for real operation.
 - In demo mode, customer follow-up sends are disabled, but admin notifications are still allowed.
 
-## 8. Final Checks
+## 9. Final Checks
 
 Run:
 
@@ -65,6 +73,8 @@ npm test
 npm run typecheck
 npm run build
 npm run format:check
+npm run dashboard:typecheck
+npm run dashboard:build
 ```
 
 Start locally:

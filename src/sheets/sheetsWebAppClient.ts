@@ -25,8 +25,14 @@ export type SheetsAction =
   | "listHotLeads"
   | "listWarmLeads"
   | "listColdLeads"
+  | "listMessages"
+  | "listMessagesByLead"
+  | "listMessagesByTelegramUser"
   | "appendFollowUp"
   | "listFollowUps"
+  | "listSettings"
+  | "upsertSetting"
+  | "getDashboardData"
   | "updateFollowUp"
   | "appendReport"
   | "getReportSummary"
@@ -70,6 +76,25 @@ export interface SeedDemoDataResult {
 export interface ClearDemoDataResult {
   cleared: boolean;
   deletedRows?: number;
+}
+
+export interface MessageFilters {
+  leadId?: string;
+  telegramUserId?: string;
+}
+
+export interface SettingRecord {
+  key: string;
+  value: string;
+}
+
+export interface DashboardDataResult {
+  leads: LeadRecord[];
+  messages: MessageRecord[];
+  followUps: FollowUpRecord[];
+  reports: ReportRecord[];
+  settings: SettingRecord[];
+  summary: ReportSummary;
 }
 
 interface SheetsRequestBody {
@@ -120,13 +145,27 @@ const reportSummarySchema = z.object({
 });
 const seedDemoDataResultSchema = z.object({
   seeded: z.boolean(),
-  preset: z.enum(["custom", "dental-clinic", "online-course"]).optional(),
+  preset: z
+    .enum(["custom", "dental-clinic", "online-course", "physical-therapy"])
+    .optional(),
   createdLeads: z.number().optional(),
   createdMessages: z.number().optional(),
 });
 const clearDemoDataResultSchema = z.object({
   cleared: z.boolean(),
   deletedRows: z.number().optional(),
+});
+const settingSchema = z.object({
+  key: z.string(),
+  value: z.string(),
+});
+const dashboardDataResultSchema = z.object({
+  leads: z.array(objectSchema<LeadRecord>()),
+  messages: z.array(objectSchema<MessageRecord>()),
+  followUps: z.array(objectSchema<FollowUpRecord>()),
+  reports: z.array(objectSchema<ReportRecord>()),
+  settings: z.array(settingSchema),
+  summary: reportSummarySchema,
 });
 
 export class SheetsWebAppClient {
@@ -229,6 +268,14 @@ export class SheetsWebAppClient {
     return this.requestList("listColdLeads", { limit }, limit);
   }
 
+  listMessages(filters: MessageFilters = {}): Promise<MessageRecord[]> {
+    return this.request(
+      "listMessages",
+      { ...filters },
+      z.array(objectSchema<MessageRecord>()),
+    );
+  }
+
   appendFollowUp(followUp: FollowUpRecord): Promise<FollowUpRecord> {
     return this.request(
       "appendFollowUp",
@@ -242,6 +289,20 @@ export class SheetsWebAppClient {
       "listFollowUps",
       { status },
       z.array(objectSchema<FollowUpRecord>()),
+    );
+  }
+
+  listSettings(): Promise<SettingRecord[]> {
+    return this.request("listSettings", {}, z.array(settingSchema));
+  }
+
+  upsertSetting(setting: SettingRecord): Promise<SettingRecord> {
+    return this.request("upsertSetting", { ...setting }, settingSchema);
+  }
+
+  getDashboardData(): Promise<DashboardDataResult> {
+    return this.request("getDashboardData", {}, dashboardDataResultSchema).then(
+      (data) => data as DashboardDataResult,
     );
   }
 

@@ -39,6 +39,7 @@ export const businessPresets = [
   "custom",
   "dental-clinic",
   "online-course",
+  "physical-therapy",
 ] as const;
 
 export type BusinessPreset = (typeof businessPresets)[number];
@@ -47,6 +48,7 @@ const businessPresetPaths: Record<BusinessPreset, string> = {
   custom: "config/business.json",
   "dental-clinic": "config/examples/dental-clinic.json",
   "online-course": "config/examples/online-course-business.json",
+  "physical-therapy": "config/examples/physical-therapy.json",
 };
 
 export function loadBusinessConfig(

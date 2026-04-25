@@ -52,7 +52,7 @@ const envSchema = z.object({
   ADMIN_PASSWORD: z.string().min(8),
   DEMO_MODE: booleanFromEnv.default(false),
   BUSINESS_PRESET: z
-    .enum(["custom", "dental-clinic", "online-course"])
+    .enum(["custom", "dental-clinic", "online-course", "physical-therapy"])
     .default("custom"),
   BOT_MODE: z.enum(["polling", "webhook"]).default("polling"),
 });

@@ -105,12 +105,13 @@ describe("adminCommands", () => {
     );
   });
 
-  it("supports explicit dental and course demo commands", async () => {
+  it("supports explicit dental, course, and physical therapy demo commands", async () => {
     const { commands, deps } = registerMockedAdminCommands("custom");
     const ctx = createContext(123);
 
     await commands.demo_dental?.(ctx);
     await commands.demo_course?.(ctx);
+    await commands.demo_physical?.(ctx);
 
     expect(deps.sheets.seedDemoData).toHaveBeenNthCalledWith(
       1,
@@ -120,11 +121,19 @@ describe("adminCommands", () => {
       2,
       "online-course",
     );
+    expect(deps.sheets.seedDemoData).toHaveBeenNthCalledWith(
+      3,
+      "physical-therapy",
+    );
   });
 });
 
 function registerMockedAdminCommands(
-  businessPreset: "custom" | "dental-clinic" | "online-course",
+  businessPreset:
+    | "custom"
+    | "dental-clinic"
+    | "online-course"
+    | "physical-therapy",
 ) {
   const commands: Record<string, (ctx: Context) => Promise<void>> = {};
   const bot = {

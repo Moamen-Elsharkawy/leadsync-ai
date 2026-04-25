@@ -7,6 +7,7 @@ SmartFlow AI Telegram Sales Agent is intentionally small and inspectable.
 - `src/index.ts` starts the bot, admin dashboard, and follow-up scheduler.
 - Telegraf runs the Telegram bot in polling mode.
 - Express serves a minimal password-protected dashboard and JSON API.
+- `apps/dashboard` serves the professional Next.js web dashboard.
 - node-cron checks pending follow-ups.
 
 ## AI
@@ -21,6 +22,7 @@ SmartFlow AI Telegram Sales Agent is intentionally small and inspectable.
 
 - Google Sheets is the CRM and storage layer.
 - Node.js calls only the Apps Script Web App over HTTP POST.
+- The Next.js dashboard also reads data through the Apps Script Web App only.
 - The request shape is `{ secret, action, payload }`.
 - Apps Script validates `SMARTFLOW_SECRET`, then reads or writes the active spreadsheet.
 

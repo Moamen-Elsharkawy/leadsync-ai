@@ -1,6 +1,49 @@
 # Demo Conversations
 
-These sample conversations are safe fake data for portfolio demos. They show the intended Arabic customer experience while keeping all internal implementation details in English.
+These sample conversations are safe fake data for portfolio demos. They show the intended Arabic customer experience while keeping implementation details in English.
+
+## Physical Therapy: Hot Lead
+
+Customer:
+مساء الخير، محتاج جلسة علاج طبيعي لأسفل الظهر في فرع مدينة نصر بكرة لو ينفع. رقمي 01044440001.
+
+Bot:
+أهلا بحضرتك، سلامتك. أقدر أسجل طلبك للاستقبال بدون تشخيص داخل المحادثة. هل لديك ميزانية تقريبية أو وقت مفضل للتواصل؟
+
+Customer:
+مناسب بعد العصر، والميزانية حوالي ٨٠٠ إلى ١٢٠٠ جنيه.
+
+Bot:
+تمام، سجلت التفاصيل ليستطيع فريق الاستقبال مراجعة الطلب والتواصل معك. لا يوجد تشخيص أو تأكيد موعد داخل المحادثة قبل مراجعة الفريق.
+
+Expected result:
+
+- Service: Back pain physiotherapy
+- Location: Nasr City Branch
+- Timeline: tomorrow
+- Phone: captured
+- Status: Hot
+- Admin notification: yes
+
+## Physical Therapy: Warm Lead
+
+Customer:
+كام سعر جلسة المانيوال؟
+
+Bot:
+الأسعار النهائية يراجعها فريق الاستقبال حسب الخدمة والفرع. هل تبحث عن فرع مدينة نصر، المعادي، أم التجمع؟
+
+Customer:
+لسه بشوف الأسعار بس، ممكن التفاصيل؟
+
+Bot:
+أكيد. سجلت إنك مهتم باستفسار Manual therapy، ويمكن للفريق توضيح التفاصيل بدون تأكيد سعر نهائي قبل المراجعة.
+
+Expected result:
+
+- Service: Manual therapy inquiry
+- Status: Warm
+- Follow-up: queued in production, customer sending disabled when `DEMO_MODE=true`
 
 ## Dental Clinic: Hot Lead
 
@@ -24,27 +67,6 @@ Expected result:
 - Status: Hot
 - Admin notification: yes
 
-## Dental Clinic: Warm Lead
-
-Customer:
-ممكن أعرف تفاصيل تنظيف وتلميع الأسنان؟
-
-Bot:
-أكيد. هل تفكرين في زيارة قريبة أم تريدين معرفة التفاصيل أولا؟
-
-Customer:
-غالبا الأسبوع الجاي، بس محتاجة أعرف النظام الأول.
-
-Bot:
-شكرا للتوضيح. سجلت اهتمامك بتنظيف وتلميع الأسنان، ويمكن لفريق الاستقبال توضيح التفاصيل المناسبة بدون تأكيد سعر نهائي قبل المراجعة.
-
-Expected result:
-
-- Service: تنظيف وتلميع الأسنان
-- Timeline: next week
-- Status: Warm
-- Follow-up: queued in production, customer sending disabled when `DEMO_MODE=true`
-
 ## Online Course: Hot Lead
 
 Customer:
@@ -67,37 +89,16 @@ Expected result:
 - Status: Hot
 - Admin notification: yes
 
-## Online Course: Warm Lead
-
-Customer:
-أنا محتار أبدأ Data ولا Marketing ومحتاج حد يوجهني.
-
-Bot:
-أكيد. هل ترغب في البدء هذا الشهر أم تجمع معلومات حاليا؟
-
-Customer:
-غالبا هذا الشهر، بس لسه مش محدد الميزانية.
-
-Bot:
-شكرا للتوضيح. سجلت اهتمامك باستشارة اختيار مسار التعلم، ويمكن لفريق القبول مساعدتك في اختيار البرنامج المناسب.
-
-Expected result:
-
-- Service: استشارة اختيار مسار التعلم
-- Timeline: this month
-- Status: Warm
-- Follow-up: queued in production, customer sending disabled when `DEMO_MODE=true`
-
 ## Cold Lead
 
 Customer:
-السلام عليكم
+عايز اعرف التفاصيل
 
 Bot:
-وعليكم السلام، ما الخدمة التي تحتاجها بالتحديد؟
+أكيد. ما الخدمة التي تحتاجها بالتحديد؟
 
 Customer:
-مش عارف، كنت بس بسأل.
+لسه مش محدد.
 
 Bot:
 لا مشكلة. عندما يكون لديك طلب واضح، أرسل التفاصيل وسنساعدك بالخطوة المناسبة.

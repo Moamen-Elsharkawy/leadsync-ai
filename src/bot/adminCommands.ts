@@ -1,4 +1,4 @@
-import type { Context, Telegraf } from "telegraf";
+﻿import type { Context, Telegraf } from "telegraf";
 import type { BusinessPreset } from "../config/businessConfig.js";
 import type { SheetsWebAppClient } from "../sheets/sheetsWebAppClient.js";
 import type { FollowUpService } from "../services/followUpService.js";
@@ -129,6 +129,15 @@ export function registerAdminCommands(
     "demo_course",
     adminOnly(deps, async (ctx) => {
       const preset = "online-course";
+      const result = await deps.sheets.seedDemoData(preset);
+      await ctx.reply(formatDemoSeedResult(result, preset));
+    }),
+  );
+
+  bot.command(
+    "demo_physical",
+    adminOnly(deps, async (ctx) => {
+      const preset = "physical-therapy";
       const result = await deps.sheets.seedDemoData(preset);
       await ctx.reply(formatDemoSeedResult(result, preset));
     }),
@@ -306,6 +315,7 @@ function formatAdminHelp(): string {
     "/demo - seed demo data for the active business preset",
     "/demo_dental - seed Dental Clinic demo data",
     "/demo_course - seed Online Course demo data",
+    "/demo_physical - seed Physical Therapy demo data",
     "/clear_demo - clear demo data only",
   ].join("\n");
 }
@@ -328,6 +338,10 @@ function formatPresetName(preset: string): string {
 
   if (preset === "online-course") {
     return "Online Course";
+  }
+
+  if (preset === "physical-therapy") {
+    return "Physical Therapy";
   }
 
   return "Custom Business";

@@ -37,6 +37,19 @@ describe("businessConfig presets", () => {
     expect(config.services).toContain("الاشتراك في كورس فردي");
   });
 
+  it("loads the physical therapy preset", () => {
+    const config = loadBusinessConfigForPreset("physical-therapy");
+
+    expect(resolveBusinessConfigPath("physical-therapy")).toBe(
+      "config/examples/physical-therapy.json",
+    );
+    expect(config.businessName).toBe("MoveWell Physical Therapy Centers");
+    expect(config.services).toContain("Back pain physiotherapy");
+    expect(config.forbiddenClaims).toContain(
+      "Do not diagnose medical conditions.",
+    );
+  });
+
   it("fails env validation for invalid business presets", () => {
     stubRequiredEnv();
     vi.stubEnv("BUSINESS_PRESET", "invalid-preset");

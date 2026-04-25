@@ -30,6 +30,7 @@ The Node app never uses a direct Google Sheets API client, service account, cred
 8. Warm leads can be queued for follow-up.
 9. Hot leads notify the admin.
 10. The owner can inspect leads through Telegram commands or the Express dashboard.
+11. The owner can use the Next.js dashboard for analytics, conversations, reports, follow-ups, demo controls, and system health.
 
 ## Safety And Constraints
 
@@ -45,7 +46,7 @@ The Node app never uses a direct Google Sheets API client, service account, cred
 
 Demo Mode is designed for portfolio and sales walkthroughs:
 
-- Uses `BUSINESS_PRESET` to switch between custom, Dental Clinic, and Online Course versions.
+- Uses `BUSINESS_PRESET` to switch between custom, Physical Therapy, Dental Clinic, and Online Course versions.
 - Seeds 10 fake realistic leads for the selected business type.
 - Includes Arabic customer messages.
 - Marks all demo rows with `isDemo=true`.
@@ -54,8 +55,11 @@ Demo Mode is designed for portfolio and sales walkthroughs:
 
 The productized presets make the project easier to sell as a vertical automation offer:
 
+- Physical Therapy AI Sales Agent for therapy centers, rehab clinics, and multi-branch local healthcare businesses.
 - Dental Clinic AI Sales Agent for clinics, dentists, orthodontists, and healthcare reception teams.
 - Online Course AI Sales Agent for academies, coaches, cohort programs, and training companies.
+
+For the physical therapy demo, SmartFlow collects intake details and routes leads to staff. It does not diagnose, provide treatment advice, recommend exercises, promise recovery outcomes, estimate required session counts, or confirm appointments before staff review.
 
 ## Business Value
 
@@ -66,4 +70,5 @@ The MVP gives a small business:
 - A spreadsheet CRM they already understand.
 - Owner-friendly Telegram admin commands.
 - A simple dashboard for pipeline visibility.
+- A professional web dashboard for client-ready analytics and reporting.
 - A deployable automation foundation without unnecessary infrastructure.

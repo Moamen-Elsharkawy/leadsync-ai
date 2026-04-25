@@ -10,6 +10,7 @@ Production-quality MVP for a Telegram AI sales assistant. The bot uses Telegram 
 - Google Apps Script Web App using the active spreadsheet
 - Google Sheets tabs: `Leads`, `Sessions`, `Messages`, `FollowUps`, `Reports`, `Settings`
 - Express admin API and simple dashboard
+- Professional Next.js web dashboard under `apps/dashboard`
 - Cron-based follow-up sender
 
 No Google Cloud service account, no Google Sheets API credentials, and no database are used.
@@ -53,6 +54,13 @@ No Google Cloud service account, no Google Sheets API credentials, and no databa
 
 The admin dashboard runs at `http://localhost:3000/dashboard?password=YOUR_ADMIN_PASSWORD` unless `ADMIN_PORT` is changed.
 
+The professional web dashboard runs separately at `http://localhost:3001/login`:
+
+```bash
+npm --prefix apps/dashboard install
+npm run dashboard:dev
+```
+
 ## Demo Script
 
 Use Demo Mode when presenting the project to clients, recruiters, or on a portfolio page. Demo Mode marks all new bot-created leads as demo leads, seeds safe fake Arabic leads for the active `BUSINESS_PRESET`, and disables automatic customer follow-up sends. Admin notifications still work, so Hot lead alerts can be shown safely.
@@ -64,7 +72,7 @@ Use Demo Mode when presenting the project to clients, recruiters, or on a portfo
    DEMO_MODE=true
    ```
 
-   Use `BUSINESS_PRESET=online-course` to switch to the course business version.
+   Use `BUSINESS_PRESET=physical-therapy` for the MoveWell therapy demo or `BUSINESS_PRESET=online-course` to switch to the course business version.
 
 2. Start the app:
 
@@ -85,7 +93,7 @@ Use Demo Mode when presenting the project to clients, recruiters, or on a portfo
 6. Show the workflow:
    - `/leads` to list the latest pipeline.
    - `/hot` to show urgent opportunities.
-   - `/lead_lead_demo_dental_clinic_001` or `/lead_lead_demo_online_course_001` to inspect a full demo lead.
+   - `/lead_lead_demo_physical_therapy_001`, `/lead_lead_demo_dental_clinic_001`, or `/lead_lead_demo_online_course_001` to inspect a full demo lead.
    - `/report` to show Hot/Warm/Cold counts.
    - The Google Sheet tabs to prove the system uses Sheets as the CRM.
 
@@ -172,10 +180,11 @@ This project uses OpenRouter through the official `openai` npm package. Configur
 The bot is reusable across businesses through `BUSINESS_PRESET`.
 
 - `BUSINESS_PRESET=custom` loads `config/business.json`.
+- `BUSINESS_PRESET=physical-therapy` loads `config/examples/physical-therapy.json`.
 - `BUSINESS_PRESET=dental-clinic` loads `config/examples/dental-clinic.json`.
 - `BUSINESS_PRESET=online-course` loads `config/examples/online-course-business.json`.
 
-Use `custom` when editing your own business config. The preset files are productized portfolio versions for a dental clinic and an online course business.
+Use `custom` when editing your own business config. The preset files are productized portfolio versions for a physical therapy center, a dental clinic, and an online course business.
 
 Required top-level fields:
 
@@ -197,6 +206,7 @@ Example configs are available in:
 - `config/examples/dental-clinic.json`
 - `config/examples/marketing-agency.json`
 - `config/examples/online-course-business.json`
+- `config/examples/physical-therapy.json`
 
 To switch businesses:
 
@@ -224,13 +234,14 @@ No code changes, database, Google Cloud setup, Service Account, or Google Sheets
 - `/demo` - seed demo data for the active business preset
 - `/demo_dental` - seed Dental Clinic demo data
 - `/demo_course` - seed Online Course demo data
+- `/demo_physical` - seed Physical Therapy demo data
 - `/clear_demo` - clear demo data
 
 Admin-only commands require `ADMIN_TELEGRAM_ID`.
 
 ## Admin Dashboard And API
 
-The Express admin server starts with the bot on `ADMIN_PORT`. It reads all CRM data through the Apps Script Web App client; no database or Google API credentials are used.
+The Express admin server starts with the bot on `ADMIN_PORT`. It is kept as a legacy lightweight dashboard and JSON API. It reads all CRM data through the Apps Script Web App client; no database or Google API credentials are used.
 
 Set these values in `.env`:
 
@@ -250,6 +261,44 @@ Routes:
 
 You can also authenticate with the `x-admin-password` header or HTTP Basic auth.
 
+## Professional Web Dashboard
+
+A client-ready Next.js dashboard is available in `apps/dashboard`.
+
+Features:
+
+- Server-side admin login with `ADMIN_PASSWORD`
+- Overview KPIs and Recharts analytics
+- Leads table with search, filters, sorting, badges, and lead details
+- Chat-style conversation viewer from the Messages sheet
+- Follow-up queue visibility from the FollowUps sheet
+- Reports page with copy, print, and CSV export
+- Read-only business settings page
+- Demo controls for seeding and clearing demo data
+- System health page that shows env presence without exposing values
+
+Run it:
+
+```bash
+npm --prefix apps/dashboard install
+npm run dashboard:dev
+```
+
+Open:
+
+```text
+http://localhost:3001/login
+```
+
+Use `ADMIN_PASSWORD` from `.env`. Optional dashboard env values:
+
+```bash
+DASHBOARD_PORT=3001
+DASHBOARD_SECRET=replace-with-dashboard-secret
+```
+
+The dashboard uses the same Apps Script Web App storage bridge. It does not read Google Sheets directly.
+
 ## Verification
 
 ```bash
@@ -257,6 +306,8 @@ npm run typecheck
 npm test
 npm run build
 npm run format:check
+npm run dashboard:typecheck
+npm run dashboard:build
 ```
 
 ## Troubleshooting
@@ -277,6 +328,8 @@ Required variables:
 - `GOOGLE_SHEETS_WEBAPP_SECRET`
 - `ADMIN_PORT`
 - `ADMIN_PASSWORD`
+- `DASHBOARD_PORT`
+- `DASHBOARD_SECRET`
 - `BUSINESS_PRESET`
 - `DEMO_MODE`
 - `BOT_MODE`
@@ -316,16 +369,18 @@ Use `/clear_demo` from the admin Telegram account. The Apps Script action delete
 
 ### Wrong demo business
 
-Check `BUSINESS_PRESET` in `.env`. `/demo` uses the active preset. You can also force a seed with `/demo_dental` or `/demo_course`. If `google-apps-script/Code.gs` was changed, copy it into Apps Script, redeploy the Web App, and run `npm run setup:sheets`.
+Check `BUSINESS_PRESET` in `.env`. `/demo` uses the active preset. You can also force a seed with `/demo_physical`, `/demo_dental`, or `/demo_course`. If `google-apps-script/Code.gs` was changed, copy it into Apps Script, redeploy the Web App, and run `npm run setup:sheets`.
 
 ## Additional Docs
 
 - `docs/setup-checklist.md`
 - `docs/apps-script-setup.md`
 - `docs/architecture.md`
+- `docs/dashboard.md`
 - `docs/client-demo-script.md`
 - `docs/case-study.md`
 - `docs/demo-conversations.md`
+- `docs/manual-qa-checklist.md`
 - `docs/dental-clinic-demo.md`
 - `docs/online-course-demo.md`
 

@@ -1,24 +1,26 @@
 # Client Demo Script
 
-This script is for a live client or portfolio walkthrough using safe demo data. It now supports two productized demo paths: Dental Clinic and Online Course.
+This script is for a live client or portfolio walkthrough using safe demo data. It supports Dental Clinic, Online Course, and Physical Therapy demo paths.
 
 ## Before The Call
 
 - Set `DEMO_MODE=true` in `.env`.
 - Choose one preset:
+  - `BUSINESS_PRESET=physical-therapy`
   - `BUSINESS_PRESET=dental-clinic`
   - `BUSINESS_PRESET=online-course`
 - Confirm Apps Script is deployed and initialized.
 - If you edited `google-apps-script/Code.gs`, paste it into Apps Script and redeploy the Web App.
 - Run `npm run setup:sheets`.
-- Start the app with `npm run dev`.
+- Start the bot with `npm run dev`.
+- Start the dashboard with `npm run dashboard:dev`.
 - Open the Google Sheet and keep the tabs visible.
-- Open the dashboard URL with the admin password.
+- Open `http://localhost:3001/login` and sign in with `ADMIN_PASSWORD`.
 - Open Telegram from the admin account.
 
 ## Shared Demo Flow
 
-1. Show the architecture in one sentence:
+1. Say:
 
    "Telegram is the customer channel, OpenRouter handles AI understanding, and Google Sheets is the CRM through a Google Apps Script Web App. There is no database or Google Cloud setup."
 
@@ -28,31 +30,17 @@ This script is for a live client or portfolio walkthrough using safe demo data. 
    /setup_sheets
    ```
 
-   Show that the bot verifies the Sheets tabs and headers.
-
 3. Send:
 
    ```text
    /demo
    ```
 
-   Explain that this seeds safe fake leads and Arabic messages for the active business preset.
+   This seeds safe fake leads and Arabic messages for the active business preset.
 
-4. Show the Google Sheet tabs:
-   - Leads
-   - Sessions
-   - Messages
-   - FollowUps
-   - Reports
-   - Settings
+4. Show the Google Sheet tabs: Leads, Sessions, Messages, FollowUps, Reports, Settings.
 
-5. Open the dashboard:
-
-   ```text
-   http://localhost:3000/dashboard?password=YOUR_ADMIN_PASSWORD
-   ```
-
-   Point out total leads, Hot/Warm/Cold counts, demo lead count, and latest leads.
+5. Open the dashboard and show Overview, Leads, Conversations, Follow-ups, Reports, Demo, and System Health.
 
 6. In Telegram, send:
 
@@ -65,12 +53,8 @@ This script is for a live client or portfolio walkthrough using safe demo data. 
 7. Inspect one full demo lead:
 
    ```text
+   /lead_lead_demo_physical_therapy_001
    /lead_lead_demo_dental_clinic_001
-   ```
-
-   or:
-
-   ```text
    /lead_lead_demo_online_course_001
    ```
 
@@ -85,11 +69,44 @@ This script is for a live client or portfolio walkthrough using safe demo data. 
    /clear_demo
    ```
 
-   Explain that only rows marked `isDemo=true` are deleted.
+   Only rows marked `isDemo=true` are deleted.
+
+## Physical Therapy Demo Path
+
+Use this for physical therapy centers, clinics, sports rehab centers, and local healthcare service businesses.
+
+1. Set:
+
+   ```env
+   BUSINESS_PRESET=physical-therapy
+   DEMO_MODE=true
+   ```
+
+2. Seed with `/demo` or force it with:
+
+   ```text
+   /demo_physical
+   ```
+
+3. From a non-admin Telegram account, send:
+
+   ```text
+   محتاج جلسة علاج طبيعي لأسفل الظهر في فرع مدينة نصر بكرة. رقمي 01044440001.
+   ```
+
+4. Show that the bot captures:
+   - Service: Back pain physiotherapy
+   - Location: Nasr City Branch
+   - Timeline: tomorrow
+   - Phone: captured
+   - Status: Hot
+   - Admin alert: yes
+
+5. Positioning line:
+
+   "For healthcare services, this qualifies intake requests without diagnosing, recommending treatment, promising recovery, or confirming appointments before staff review."
 
 ## Dental Clinic Demo Path
-
-Use this for clinics, dentists, orthodontists, and local healthcare businesses.
 
 1. Set:
 
@@ -98,33 +115,19 @@ Use this for clinics, dentists, orthodontists, and local healthcare businesses.
    DEMO_MODE=true
    ```
 
-2. Seed with `/demo` or force it with:
+2. Seed with `/demo` or `/demo_dental`.
 
-   ```text
-   /demo_dental
-   ```
-
-3. From a non-admin Telegram account, send:
+3. Sample customer message:
 
    ```text
    مساء الخير، محتاج استشارة زراعة أسنان الأسبوع ده. عندي أشعة جاهزة وميزانيتي حوالي ٢٥ ألف. رقمي 01011110001.
    ```
 
-4. Show that the bot captures:
-   - Service: زراعة الأسنان
-   - Timeline: this week
-   - Budget: 25000 EGP
-   - Phone: captured
-   - Status: Hot
-   - Admin alert: yes
-
-5. Positioning line:
+4. Positioning line:
 
    "For clinics, this qualifies patient inquiries without giving medical diagnosis, final prices, or confirmed appointments before reception approval."
 
 ## Online Course Demo Path
-
-Use this for academies, coaches, course creators, and training companies.
 
 1. Set:
 
@@ -133,27 +136,15 @@ Use this for academies, coaches, course creators, and training companies.
    DEMO_MODE=true
    ```
 
-2. Seed with `/demo` or force it with:
+2. Seed with `/demo` or `/demo_course`.
 
-   ```text
-   /demo_course
-   ```
-
-3. From a non-admin Telegram account, send:
+3. Sample customer message:
 
    ```text
    عايز أشترك في كورس Data Analysis وأبدأ الأسبوع ده. ميزانيتي حوالي ٥ آلاف ورقمي 01033330001.
    ```
 
-4. Show that the bot captures:
-   - Service: الاشتراك في كورس فردي
-   - Timeline: this week
-   - Budget: 5000 EGP
-   - Phone: captured
-   - Status: Hot
-   - Admin alert: yes
-
-5. Positioning line:
+4. Positioning line:
 
    "For course businesses, this filters serious learners, captures budget and start timeline, and avoids promising jobs, discounts, or confirmed enrollment."
 
@@ -162,4 +153,4 @@ Use this for academies, coaches, course creators, and training companies.
 - "This is lightweight enough for a small business to run without a database."
 - "The business owner can inspect everything in Google Sheets."
 - "The Apps Script bridge avoids service accounts and Google Cloud setup."
-- "The same codebase can be sold as vertical templates for clinics, academies, agencies, and local service businesses."
+- "The same engine can be sold as vertical templates for clinics, therapy centers, academies, agencies, and local service businesses."
