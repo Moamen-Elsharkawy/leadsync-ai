@@ -32,7 +32,7 @@ const env: Env = {
   ADMIN_PORT: 3000,
   ADMIN_PASSWORD: "admin-password",
   DEMO_MODE: false,
-  BUSINESS_PRESET: "custom",
+  BUSINESS_PRESET: "physical-therapy",
   BOT_MODE: "polling",
   OPENROUTER_TIMEOUT_MS: 1000,
   OPENROUTER_MAX_RETRIES: 1,

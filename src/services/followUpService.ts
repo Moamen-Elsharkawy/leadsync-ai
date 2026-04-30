@@ -28,7 +28,6 @@ export interface QualificationFollowUpInput {
 }
 
 export interface FollowUpServiceOptions {
-  demoMode?: boolean;
   scheduler?: CronScheduler;
 }
 
@@ -55,9 +54,6 @@ export class FollowUpService {
   ) {}
 
   async scheduleForLead(lead: LeadRecord): Promise<FollowUpRecord | null> {
-    if (this.options.demoMode) {
-      return null;
-    }
 
     const decision = getLeadFollowUpDecision(lead);
     if (
@@ -84,9 +80,6 @@ export class FollowUpService {
   async scheduleIncompleteQualificationFollowUp(
     input: QualificationFollowUpInput,
   ): Promise<FollowUpRecord | null> {
-    if (this.options.demoMode) {
-      return null;
-    }
 
     const scheduledAt = addHoursIso(WARM_FOLLOW_UP_DELAY_HOURS);
     return this.appendIfAllowed({
@@ -152,10 +145,6 @@ export class FollowUpService {
   }
 
   async processDueFollowUps(sender = this.defaultSender): Promise<void> {
-    if (this.options.demoMode) {
-      logger.info("Demo mode enabled; skipping customer follow-up sends");
-      return;
-    }
 
     if (!sender) {
       throw new Error("A follow-up sender is required.");
@@ -279,10 +268,10 @@ export function getLeadFollowUpDecision(lead: LeadRecord): FollowUpDecision {
 
 export function buildFollowUpMessage(reason: FollowUpReason): string {
   if (reason === "incomplete_qualification") {
-    return "مرحبا، أردنا المتابعة بخصوص طلبك. هل يمكنك إرسال التفاصيل الناقصة حتى نساعدك بشكل أفضل؟";
+    return "مرحبا، نتابع معك بخصوص استفسار العلاج الطبيعي. هل يمكنك إرسال التفاصيل الناقصة مثل الفرع المناسب أو وقت التواصل حتى يساعدك فريق الاستقبال بشكل أفضل؟";
   }
 
-  return "مرحبا، شكرا لتواصلك معنا سابقا. هل ما زلت مهتما بأن نساعدك في الخطوة التالية؟";
+  return "مرحبا، شكرا لتواصلك مع MoveWell سابقا. هل ما زلت ترغب في أن يتواصل معك فريق الاستقبال لمراجعة استفسارك؟";
 }
 
 export function shouldScheduleFollowUpForStatus(status: LeadStatus): boolean {

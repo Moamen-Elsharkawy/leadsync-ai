@@ -6,7 +6,7 @@ export interface LeadFilters {
   status?: LeadStatus | "all";
   stage?: LeadStage | "all";
   serviceRequested?: string;
-  isDemo?: boolean | "all";
+
   sortBy?: "createdAt" | "updatedAt" | "leadScore";
   sortDirection?: "asc" | "desc";
   limit?: number;
@@ -26,6 +26,7 @@ export interface DashboardSummary {
   leadsCreatedToday: number;
   leadsCreatedThisWeek: number;
   averageLeadScore: number;
+  urgentLeads: number;
 }
 
 export interface LeadAnalytics {
@@ -33,6 +34,8 @@ export interface LeadAnalytics {
   leadsByStatus: Array<{ name: LeadStatus; value: number }>;
   followUpsByStatus: Array<{ name: string; value: number }>;
   topRequestedServices: Array<{ service: string; leads: number }>;
+  branchDemand: Array<{ branch: string; leads: number }>;
+  urgencyDistribution: Array<{ urgency: string; leads: number }>;
   leadsByStage: Array<{ stage: string; leads: number }>;
   leadTimelineDistribution: Array<{ timeline: string; leads: number }>;
   dailyLeadVolume: Array<{ date: string; leads: number }>;
@@ -55,6 +58,10 @@ export function getDashboardSummary(
   ).length;
   const failedFollowUps = followUps.filter(
     (followUp) => followUp.status === "failed",
+  ).length;
+  const urgentLeads = leads.filter(
+    (lead) =>
+      lead.status === "Hot" || normalizeUrgency(lead.urgency) === "urgent",
   ).length;
   const overdueFollowUps = followUps.filter(
     (followUp) =>
@@ -85,6 +92,7 @@ export function getDashboardSummary(
           scores.reduce((sum, score) => sum + score, 0) / scores.length,
         )
       : 0,
+    urgentLeads,
   };
 }
 
@@ -109,6 +117,18 @@ export function getLeadAnalytics(
       leads.filter((lead) => Boolean(lead.serviceRequested)),
       (lead) => lead.serviceRequested,
       "service",
+      "leads",
+    ).slice(0, 8),
+    branchDemand: countByKey(
+      leads.filter((lead) => Boolean(lead.branch || lead.location)),
+      (lead) => lead.branch || lead.location,
+      "branch",
+      "leads",
+    ).slice(0, 8),
+    urgencyDistribution: countByKey(
+      leads.filter((lead) => Boolean(lead.urgency || lead.status)),
+      (lead) => normalizeUrgency(lead.urgency) || lead.status,
+      "urgency",
       "leads",
     ).slice(0, 8),
     leadsByStage: countByKey(
@@ -159,11 +179,7 @@ export function filterLeads(
       return false;
     }
 
-    if (filters.isDemo !== undefined && filters.isDemo !== "all") {
-      if (Boolean(lead.isDemo) !== filters.isDemo) {
-        return false;
-      }
-    }
+
 
     if (!search) {
       return true;
@@ -174,6 +190,9 @@ export function filterLeads(
       lead.telegramUsername,
       lead.phone,
       lead.serviceRequested,
+      lead.branch,
+      lead.location,
+      lead.conditionArea,
       lead.notes,
       lead.leadId,
     ]
@@ -205,13 +224,14 @@ export function buildOwnerReportText(
     .join(", ");
 
   return [
-    "SmartFlow AI Sales Report",
-    `Total leads: ${summary.totalLeads}`,
-    `Hot leads: ${summary.hotLeads}`,
-    `Warm leads: ${summary.warmLeads}`,
-    `Cold leads: ${summary.coldLeads}`,
+    "MoveWell Physical Therapy Intake Report",
+    `Total inquiries: ${summary.totalLeads}`,
+    `Urgent leads: ${summary.hotLeads}`,
+    `Follow-up leads: ${summary.warmLeads}`,
+    `Low-priority leads: ${summary.coldLeads}`,
+    `Urgent inquiries: ${summary.urgentLeads}`,
     `Pending follow-ups: ${summary.pendingFollowUps}`,
-    `Conversion rate: ${summary.conversionRate}%`,
+    `Urgent lead ratio: ${summary.conversionRate}%`,
     `Average lead score: ${summary.averageLeadScore}`,
     `Top requested services: ${topServices || "No service data yet"}`,
     "",
@@ -221,18 +241,18 @@ export function buildOwnerReportText(
 
 export function getBusinessRecommendation(summary: DashboardSummary): string {
   if (summary.hotLeads > 0) {
-    return "Recommendation: contact Hot leads first and keep follow-up notes updated.";
+    return "Recommendation: contact urgent therapy inquiries first and keep intake notes updated.";
   }
 
   if (summary.warmLeads > summary.hotLeads) {
-    return "Recommendation: review Warm leads and improve qualification questions or follow-up cadence.";
+    return "Recommendation: review follow-up leads and confirm branch, timing, or contact details.";
   }
 
   if (summary.totalLeads === 0) {
-    return "Recommendation: seed demo data or start customer conversations to populate the CRM.";
+    return "Recommendation: seed MoveWell demo data or start Telegram customer conversations to populate the intake CRM.";
   }
 
-  return "Recommendation: keep monitoring lead quality and response time.";
+  return "Recommendation: monitor urgent cases, branch demand, and response time daily.";
 }
 
 function groupLeadsByDate(
@@ -294,6 +314,21 @@ function normalizeTimelineBucket(value: string): string {
   }
 
   return value.slice(0, 40);
+}
+
+function normalizeUrgency(value?: string): string {
+  const normalized = String(value || "").toLowerCase();
+  if (
+    /urgent|today|tomorrow|asap|عاجل|النهارده|اليوم|بكرة|بكره/.test(normalized)
+  ) {
+    return "urgent";
+  }
+
+  if (/soon|this week|قريب|الأسبوع|الاسبوع/.test(normalized)) {
+    return "soon";
+  }
+
+  return value?.slice(0, 40) || "";
 }
 
 function isSameDate(value: string, now: Date): boolean {

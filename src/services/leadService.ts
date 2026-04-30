@@ -15,7 +15,6 @@ export interface BuildLeadInput {
   lastQuestionAsked?: string;
   existingLead?: LeadRecord | null;
   latestMessageText: string;
-  isDemo?: boolean;
 }
 
 export class LeadService {
@@ -69,9 +68,21 @@ export function buildLeadRecord(input: BuildLeadInput): LeadRecord {
     phone: input.fields.phone ?? existing?.phone ?? "",
     serviceRequested:
       input.fields.serviceRequested ?? existing?.serviceRequested ?? "",
+    branch: input.fields.branch ?? existing?.branch ?? "",
+    conditionArea: input.fields.conditionArea ?? existing?.conditionArea ?? "",
+    urgency: input.fields.urgency ?? existing?.urgency ?? "",
+    preferredDate: input.fields.preferredDate ?? existing?.preferredDate ?? "",
+    preferredTime: input.fields.preferredTime ?? existing?.preferredTime ?? "",
+    contactPreference:
+      input.fields.contactPreference ?? existing?.contactPreference ?? "",
     budget: input.fields.budget ?? existing?.budget ?? "",
     timeline: input.fields.timeline ?? existing?.timeline ?? "",
-    location: input.fields.location ?? existing?.location ?? "",
+    location:
+      input.fields.location ??
+      input.fields.branch ??
+      existing?.location ??
+      existing?.branch ??
+      "",
     status: input.classification.status,
     leadScore: input.classification.leadScore,
     stage: input.classification.stage,
@@ -89,7 +100,6 @@ export function buildLeadRecord(input: BuildLeadInput): LeadRecord {
     nextFollowUpAt:
       existing?.nextFollowUpAt ||
       (shouldScheduleFollowUp ? addHoursIso(24) : ""),
-    isDemo: Boolean(input.isDemo ?? existing?.isDemo ?? false),
   };
 }
 
@@ -97,10 +107,11 @@ export function formatLeadSummary(lead: LeadRecord): string {
   return [
     `${lead.status} (${lead.leadScore}) - ${lead.leadId}`,
     `Service: ${lead.serviceRequested || "unknown"}`,
+    `Branch: ${lead.branch || lead.location || "unknown"}`,
+    `Urgency: ${lead.urgency || "unknown"}`,
     `Name: ${lead.fullName || "unknown"}`,
     `Phone: ${lead.phone || "unknown"}`,
-    `Budget: ${lead.budget || "unknown"}`,
-    `Timeline: ${lead.timeline || "unknown"}`,
+    `Preferred date: ${lead.preferredDate || lead.timeline || "unknown"}`,
   ].join("\n");
 }
 
@@ -133,9 +144,27 @@ function joinNotes(
   classificationNotes?: string,
   existingNotes?: string,
 ): string {
-  const notes = [existingNotes, currentNotes, classificationNotes]
-    .filter((value): value is string => Boolean(value?.trim()))
-    .map((value) => value.trim());
+  // Take only the latest classification note (replaces previous ones)
+  // and the latest extraction note, to prevent unbounded accumulation.
+  const parts: string[] = [];
 
-  return Array.from(new Set(notes)).join("\n").slice(0, 3000);
+  // Keep existing admin-added notes (lines starting with "Admin note:")
+  if (existingNotes) {
+    const adminLines = existingNotes
+      .split("\n")
+      .filter((line) => line.trim().startsWith("Admin note:"));
+    parts.push(...adminLines);
+  }
+
+  // Add the latest extraction note (if any)
+  if (currentNotes?.trim()) {
+    parts.push(currentNotes.trim());
+  }
+
+  // Add the latest classification note (if any)
+  if (classificationNotes?.trim()) {
+    parts.push(classificationNotes.trim());
+  }
+
+  return Array.from(new Set(parts)).join("\n").slice(0, 3000);
 }

@@ -1,44 +1,39 @@
 # Architecture
 
-SmartFlow AI Telegram Sales Agent is intentionally small and inspectable.
+SmartFlow is now specialized for physical therapy centers.
 
-## Runtime
+## Runtime Flow
 
-- `src/index.ts` starts the bot, admin dashboard, and follow-up scheduler.
-- Telegraf runs the Telegram bot in polling mode.
-- Express serves a minimal password-protected dashboard and JSON API.
-- `apps/dashboard` serves the professional Next.js web dashboard.
-- node-cron checks pending follow-ups.
+1. Customer sends a Telegram message.
+2. Node.js Telegraf bot receives it in polling mode.
+3. The inbound message is saved to the `Messages` sheet through the Apps Script Web App.
+4. The bot loads the customer session from the `Sessions` sheet.
+5. OpenRouter extracts physical therapy intake fields:
+   - service requested
+   - branch
+   - condition area
+   - urgency
+   - preferred date and time
+   - contact method and phone
+6. Missing data is requested one question at a time in Arabic.
+7. Qualified inquiries are classified as `Hot`, `Warm`, or `Cold`.
+8. Leads, sessions, messages, follow-ups, and reports are written only through the Apps Script Web App.
+9. The manager reviews everything in the Next.js dashboard.
 
-## AI
+## Storage Boundary
 
-- The project uses the official `openai` package configured for OpenRouter.
-- `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` configure AI access.
-- Lead extraction and classification use structured JSON.
-- Reply generation is constrained by `config/business.json`.
-- Fallback logic keeps the conversation usable when AI fails.
+Node.js never talks directly to Google Sheets. The only storage path is:
 
-## Storage
+```text
+Node.js app -> HTTP POST -> Google Apps Script Web App -> Active Google Sheet
+```
 
-- Google Sheets is the CRM and storage layer.
-- Node.js calls only the Apps Script Web App over HTTP POST.
-- The Next.js dashboard also reads data through the Apps Script Web App only.
-- The request shape is `{ secret, action, payload }`.
-- Apps Script validates `SMARTFLOW_SECRET`, then reads or writes the active spreadsheet.
+No database, Google Cloud, service account, Sheets API client, or credentials JSON is used.
 
-## Sheets
+## AI Boundary
 
-- Leads
-- Sessions
-- Messages
-- FollowUps
-- Reports
-- Settings
+OpenRouter is the only AI provider. The project uses the official `openai` npm package with the OpenRouter base URL. If OpenRouter fails, fallback logic keeps the conversation moving safely.
 
-## Constraints
+## Medical Safety
 
-- No database.
-- No direct Google Sheets API from Node.js.
-- No Service Account.
-- No credentials JSON.
-- No Google Cloud setup.
+The assistant is an intake assistant, not a clinician. It must not diagnose, provide treatment advice, recommend exercises or medication, estimate session counts, promise outcomes, quote final prices, or confirm appointments before staff review.

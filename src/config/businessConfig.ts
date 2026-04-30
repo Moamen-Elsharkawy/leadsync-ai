@@ -4,8 +4,9 @@ import { z } from "zod";
 
 const businessConfigSchema = z.object({
   businessName: z.string().min(1),
-  businessType: z.string().min(1).default("small business"),
+  businessType: z.string().min(1).default("physical therapy center"),
   language: z.literal("ar").default("ar"),
+  branches: z.array(z.string().min(1)).default([]),
   services: z.array(z.string().min(1)).default([]),
   workingHours: z
     .object({
@@ -25,8 +26,11 @@ const businessConfigSchema = z.object({
     })
     .default({}),
   qualificationQuestions: z.object({
+    fullName: z.string().min(1).optional(),
     serviceRequested: z.string().min(1),
-    budgetOrTimeline: z.string().min(1),
+    branch: z.string().min(1).optional(),
+    timing: z.string().min(1),
+    budgetOrTimeline: z.string().min(1).optional(),
     phone: z.string().min(1),
   }),
   forbiddenClaims: z.array(z.string().min(1)).default([]),
@@ -35,20 +39,12 @@ const businessConfigSchema = z.object({
 
 export type BusinessConfig = z.infer<typeof businessConfigSchema>;
 
-export const businessPresets = [
-  "custom",
-  "dental-clinic",
-  "online-course",
-  "physical-therapy",
-] as const;
+export const businessPresets = ["physical-therapy"] as const;
 
 export type BusinessPreset = (typeof businessPresets)[number];
 
 const businessPresetPaths: Record<BusinessPreset, string> = {
-  custom: "config/business.json",
-  "dental-clinic": "config/examples/dental-clinic.json",
-  "online-course": "config/examples/online-course-business.json",
-  "physical-therapy": "config/examples/physical-therapy.json",
+  "physical-therapy": "config/business.json",
 };
 
 export function loadBusinessConfig(
@@ -70,7 +66,7 @@ export function resolveBusinessConfigPath(preset: BusinessPreset): string {
 }
 
 export function loadBusinessConfigForPreset(
-  preset: BusinessPreset,
+  preset: BusinessPreset = "physical-therapy",
 ): BusinessConfig {
   return loadBusinessConfig(resolveBusinessConfigPath(preset));
 }

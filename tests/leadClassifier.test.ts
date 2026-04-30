@@ -7,13 +7,14 @@ import {
 } from "../src/ai/leadClassifier.js";
 
 describe("leadClassifier", () => {
-  it("classifies clear buying intent with timing and budget as Hot", () => {
+  it("classifies urgent therapy intake with service, branch, timing, and phone as Hot", () => {
     const result = fallbackClassifyLead({
-      serviceRequested: "Telegram bot",
-      budget: "25000 EGP",
-      timeline: "urgent",
-      phone: "+201000000000",
-      notes: "I want a quote and a call to start now",
+      serviceRequested: "Back pain physiotherapy",
+      branch: "Nasr City Branch",
+      preferredDate: "tomorrow",
+      phone: "+201044440001",
+      urgency: "urgent",
+      notes: "Customer wants a call and appointment review tomorrow",
       intent: "buying",
     });
 
@@ -21,18 +22,19 @@ describe("leadClassifier", () => {
     expect(result.leadScore).toBeGreaterThanOrEqual(75);
   });
 
-  it("classifies general interest with missing data as Warm", () => {
+  it("classifies general therapy interest with missing data as Warm", () => {
     const result = fallbackClassifyLead({
-      serviceRequested: "Website",
+      serviceRequested: "Manual therapy inquiry",
       intent: "asking",
     });
 
     expect(result.status).toBe("Warm");
   });
 
-  it("classifies irrelevant or support-only messages as Cold", () => {
+  it("classifies vague or irrelevant messages as Cold", () => {
     expect(fallbackClassifyLead({ intent: "irrelevant" }).status).toBe("Cold");
     expect(fallbackClassifyLead({ intent: "support" }).status).toBe("Cold");
+    expect(fallbackClassifyLead({ notes: "hello" }).status).toBe("Cold");
   });
 
   it("parses AI classification JSON", () => {
@@ -51,12 +53,12 @@ describe("leadClassifier", () => {
   it("uses AI classification when OpenRouter succeeds", async () => {
     const generateJson = vi.fn().mockResolvedValue({
       ok: true,
-      schemaName: "LeadClassification",
+      schemaName: "PhysicalTherapyLeadClassification",
       data: {
         status: "Hot",
         leadScore: 88,
         stage: "qualified",
-        notes: "Ready to buy.",
+        notes: "Ready for staff call.",
       },
       source: "openrouter",
     });
@@ -67,7 +69,11 @@ describe("leadClassifier", () => {
 
     const result = await classifyLead({
       client,
-      fields: { serviceRequested: "CRM", budget: "10000 EGP" },
+      fields: {
+        serviceRequested: "Sports injury rehabilitation",
+        branch: "New Cairo Branch",
+        preferredDate: "today",
+      },
     });
 
     expect(generateJson).toHaveBeenCalledOnce();

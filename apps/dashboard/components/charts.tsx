@@ -21,7 +21,7 @@ const colors = ["#176b87", "#b42318", "#a15c07", "#475467", "#3f7d58"];
 export function AnalyticsCharts({ analytics }: { analytics: LeadAnalytics }) {
   return (
     <div className="grid gap-4 xl:grid-cols-2">
-      <ChartPanel title="Daily lead volume">
+      <ChartPanel title="Daily inquiry volume">
         <ResponsiveContainer width="100%" height={260}>
           <LineChart data={analytics.dailyLeadVolume}>
             <CartesianGrid strokeDasharray="3 3" />
@@ -33,7 +33,7 @@ export function AnalyticsCharts({ analytics }: { analytics: LeadAnalytics }) {
         </ResponsiveContainer>
       </ChartPanel>
 
-      <ChartPanel title="Leads by status">
+      <ChartPanel title="Intake by priority">
         <ResponsiveContainer width="100%" height={260}>
           <PieChart>
             <Pie
@@ -52,7 +52,7 @@ export function AnalyticsCharts({ analytics }: { analytics: LeadAnalytics }) {
         </ResponsiveContainer>
       </ChartPanel>
 
-      <ChartPanel title="Top requested services">
+      <ChartPanel title="Top therapy services">
         <ResponsiveContainer width="100%" height={280}>
           <BarChart data={analytics.topRequestedServices}>
             <CartesianGrid strokeDasharray="3 3" />
@@ -60,6 +60,30 @@ export function AnalyticsCharts({ analytics }: { analytics: LeadAnalytics }) {
             <YAxis allowDecimals={false} />
             <Tooltip />
             <Bar dataKey="leads" fill="#176b87" />
+          </BarChart>
+        </ResponsiveContainer>
+      </ChartPanel>
+
+      <ChartPanel title="Branch demand">
+        <ResponsiveContainer width="100%" height={280}>
+          <BarChart data={analytics.branchDemand}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="branch" tick={{ fontSize: 10 }} />
+            <YAxis allowDecimals={false} />
+            <Tooltip />
+            <Bar dataKey="leads" fill="#3f7d58" />
+          </BarChart>
+        </ResponsiveContainer>
+      </ChartPanel>
+
+      <ChartPanel title="Urgency mix">
+        <ResponsiveContainer width="100%" height={280}>
+          <BarChart data={analytics.urgencyDistribution}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="urgency" />
+            <YAxis allowDecimals={false} />
+            <Tooltip />
+            <Bar dataKey="leads" fill="#a15c07" />
           </BarChart>
         </ResponsiveContainer>
       </ChartPanel>

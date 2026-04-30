@@ -1,18 +1,8 @@
 import Link from "next/link";
 import { logoutAction } from "../actions";
 import { requireDashboardAuth } from "../../lib/auth";
-import { getDashboardService } from "../../lib/data";
-
-const navItems = [
-  ["Overview", "/overview"],
-  ["Leads", "/leads"],
-  ["Conversations", "/conversations"],
-  ["Follow-ups", "/follow-ups"],
-  ["Reports", "/reports"],
-  ["Business Settings", "/business-settings"],
-  ["Demo", "/demo"],
-  ["System Health", "/system-health"],
-];
+import { getDashboardNavItems } from "@smartflow/dashboard/navigation";
+import { FloatingManagerChatbot } from "../../components/floating-manager-chatbot";
 
 export const dynamic = "force-dynamic";
 
@@ -22,59 +12,80 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   await requireDashboardAuth();
-  const service = getDashboardService();
-  const demoMode = service.getDemoMode();
+  const navItems = getDashboardNavItems();
 
   return (
     <div className="min-h-screen bg-canvas">
-      <aside className="fixed inset-y-0 left-0 hidden w-72 border-r border-line bg-panel p-5 lg:block">
-        <div className="mb-7">
-          <div className="text-sm font-medium text-brand">SmartFlow AI</div>
-          <div className="mt-1 text-xl font-semibold text-ink">
-            Sales Command Center
+      {/* Sidebar */}
+      <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-slate-800 bg-sidebar-bg lg:flex">
+        {/* Brand header */}
+        <div className="flex items-center gap-3 border-b border-slate-800 px-5 py-5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand font-bold text-white text-sm">
+            MW
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-white">MoveWell</div>
+            <div className="text-xs text-sidebar-text">
+              Physical Therapy Centers
+            </div>
           </div>
         </div>
-        <nav className="space-y-1">
-          {navItems.map(([label, href]) => (
+
+        {/* Navigation */}
+        <nav className="flex-1 space-y-1 px-3 py-4">
+          {navItems.map(({ label, href, icon }) => (
             <Link
               key={href}
               href={href}
-              className="block rounded-md px-3 py-2 text-sm font-medium text-ink hover:bg-slate-100"
+              className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-text transition-colors hover:bg-sidebar-hover hover:text-white"
             >
+              <span className="text-base">{icon}</span>
               {label}
             </Link>
           ))}
         </nav>
+
+        {/* Sidebar footer */}
+        <div className="border-t border-slate-800 p-4">
+          <form action={logoutAction}>
+            <button
+              type="submit"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-sidebar-text transition-colors hover:bg-sidebar-hover hover:text-white"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
       </aside>
 
-      <div className="lg:pl-72">
-        <header className="sticky top-0 z-10 border-b border-line bg-panel/95 px-4 py-3 backdrop-blur lg:px-8">
+      {/* Main content */}
+      <div className="lg:pl-64">
+        {/* Top header bar */}
+        <header className="sticky top-0 z-10 border-b border-line bg-white/95 px-4 py-3.5 backdrop-blur lg:px-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <div className="text-sm text-muted">Admin dashboard</div>
-              <div className="font-semibold text-ink">
-                Telegram sales automation platform
+              <div className="text-lg font-semibold text-ink">
+                Manager Dashboard
+              </div>
+              <div className="text-sm text-muted">
+                Physical therapy intake & lead management
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {demoMode ? (
-                <span className="rounded-full bg-amber-50 px-3 py-1 text-sm font-medium text-warm ring-1 ring-amber-100">
-                  Demo Mode
-                </span>
-              ) : null}
-              <form action={logoutAction}>
-                <button
-                  type="submit"
-                  className="rounded-md border border-line bg-white px-3 py-2 text-sm font-medium text-ink hover:bg-slate-50"
-                >
-                  Logout
-                </button>
-              </form>
+              <div className="flex items-center gap-2 rounded-full bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-700">
+                <span className="h-2 w-2 rounded-full bg-brand animate-pulse-soft" />
+                Connected
+              </div>
             </div>
           </div>
         </header>
-        <main className="mx-auto max-w-7xl space-y-6 p-4 lg:p-8">{children}</main>
+
+        {/* Page content */}
+        <main className="mx-auto max-w-7xl animate-fade-in space-y-6 p-4 lg:p-8">
+          {children}
+        </main>
       </div>
+      <FloatingManagerChatbot />
     </div>
   );
 }

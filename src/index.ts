@@ -25,9 +25,7 @@ async function main(): Promise<void> {
   const leadService = new LeadService(sheets);
   const sessionService = new SessionService(sheets);
   const messageService = new MessageService(sheets);
-  const followUpService = new FollowUpService(sheets, undefined, {
-    demoMode: env.DEMO_MODE,
-  });
+  const followUpService = new FollowUpService(sheets);
   const reportService = new ReportService(sheets);
   const bot = createBot({
     env,
@@ -40,10 +38,12 @@ async function main(): Promise<void> {
     followUpService,
     reportService,
   });
-  const adminServer = startAdminServer({
+  logger.info(`Starting admin server on port ${env.ADMIN_PORT}`);
+  const adminServer = await startAdminServer({
     port: env.ADMIN_PORT,
     password: env.ADMIN_PASSWORD,
     sheets,
+    aiClient,
     leadService,
     followUpService,
     reportService,
@@ -51,12 +51,8 @@ async function main(): Promise<void> {
 
   followUpService.start(bot);
   await bot.launch();
-  if (env.DEMO_MODE) {
-    logger.info(
-      "Demo mode enabled: demo leads are marked and customer follow-ups are disabled",
-    );
-  }
-  logger.info(`Business preset loaded: ${env.BUSINESS_PRESET}`);
+
+  logger.info("Physical therapy business config loaded");
   logger.info("Telegram bot started in polling mode");
 
   const shutdown = createShutdownHandler({
@@ -78,6 +74,6 @@ async function main(): Promise<void> {
 }
 
 void main().catch((error) => {
-  logger.error("Application failed to start", error);
+  logger.error("Application failed to start", { error });
   process.exit(1);
 });

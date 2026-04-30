@@ -1,11 +1,13 @@
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
 import { createAdminApp } from "../src/admin/adminServer.js";
+import type { OpenRouterClient } from "../src/ai/openRouterClient.js";
 import type { SheetsWebAppClient } from "../src/sheets/sheetsWebAppClient.js";
 import type { FollowUpService } from "../src/services/followUpService.js";
 import type { LeadService } from "../src/services/leadService.js";
 import type { ReportService } from "../src/services/reportService.js";
 import type { LeadRecord } from "../src/types/lead.js";
+import type { FollowUpRecord } from "../src/types/message.js";
 
 describe("adminServer", () => {
   it("exposes a public health endpoint", async () => {
@@ -22,7 +24,6 @@ describe("adminServer", () => {
   it("protects dashboard and API routes with ADMIN_PASSWORD", async () => {
     const app = createAdminApp(createDeps());
 
-    await request(app).get("/dashboard").expect(401);
     await request(app).get("/leads").expect(401);
   });
 
@@ -80,19 +81,33 @@ describe("adminServer", () => {
     });
   });
 
-  it("renders a clean server-generated dashboard", async () => {
+  it("returns chatbot response for authenticated manager query", async () => {
     const app = createAdminApp(createDeps());
-
     const response = await request(app)
-      .get("/dashboard?password=secret")
+      .post("/chatbot/query")
+      .set("x-admin-password", "secret")
+      .send({
+        question: "Give me an overview summary",
+        locale: "en",
+        requestId: "req-12345678",
+        sessionId: "session-12345678",
+      })
       .expect(200);
 
-    expect(response.text).toContain("SmartFlow AI Dashboard");
-    expect(response.text).toContain("Total leads");
-    expect(response.text).toContain("Basic conversion summary");
-    expect(response.text).toContain("Latest 20 leads");
-    expect(response.text).toContain("lead_1");
+    expect(response.body.provenance.source).toBe("google-sheets-webapp-only");
+    expect(typeof response.body.answer).toBe("string");
   });
+
+  it("rejects invalid chatbot payload", async () => {
+    const app = createAdminApp(createDeps());
+    await request(app)
+      .post("/chatbot/query")
+      .set("x-admin-password", "secret")
+      .send({ question: "x" })
+      .expect(400);
+  });
+
+
 });
 
 function createDeps() {
@@ -114,7 +129,19 @@ function createDeps() {
   return {
     port: 0,
     password: "secret",
-    sheets: {} as SheetsWebAppClient,
+    sheets: {
+      listLeads: vi.fn().mockResolvedValue([lead]),
+      listFollowUps: vi.fn().mockResolvedValue([createFollowUp()]),
+      listMessages: vi.fn().mockResolvedValue([]),
+    } as unknown as SheetsWebAppClient,
+    aiClient: {
+      generateText: vi.fn().mockResolvedValue({
+        ok: true,
+        text: "Grounded answer from sheets facts.",
+        source: "openrouter",
+      }),
+      generateJson: vi.fn(),
+    } as unknown as OpenRouterClient,
     leadService,
     followUpService: {
       listFollowUps: vi.fn().mockResolvedValue([]),
@@ -151,6 +178,18 @@ function createLead(): LeadRecord {
     updatedAt: "2026-01-01T00:00:00.000Z",
     followUpCount: 0,
     nextFollowUpAt: "",
-    isDemo: false,
+  };
+}
+
+function createFollowUp(): FollowUpRecord {
+  return {
+    followUpId: "fu_1",
+    leadId: "lead_1",
+    telegramUserId: "1",
+    status: "pending",
+    scheduledAt: "2026-01-02T00:00:00.000Z",
+    sentAt: "",
+    message: "Follow up",
+    attemptNumber: 1,
   };
 }

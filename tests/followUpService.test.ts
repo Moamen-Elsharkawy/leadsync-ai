@@ -64,24 +64,7 @@ describe("followUpService", () => {
     expect(sheets.appendFollowUp).not.toHaveBeenCalled();
   });
 
-  it("does not schedule or send customer follow-ups in demo mode", async () => {
-    const due = createFollowUp({
-      scheduledAt: "2020-01-01T00:00:00.000Z",
-      status: "pending",
-    });
-    const sheets = createSheetsMock([due]);
-    const sender = vi.fn().mockResolvedValue(undefined);
-    const service = new FollowUpService(sheets, sender, { demoMode: true });
 
-    await expect(
-      service.scheduleForLead(createLead({ status: "Warm" })),
-    ).resolves.toBeNull();
-    await service.processDueFollowUps();
-
-    expect(sender).not.toHaveBeenCalled();
-    expect(sheets.appendFollowUp).not.toHaveBeenCalled();
-    expect(sheets.updateFollowUp).not.toHaveBeenCalled();
-  });
 
   it("does not exceed two follow-ups per lead", async () => {
     const sheets = createSheetsMock([
@@ -235,7 +218,6 @@ function createLead(overrides: Partial<LeadRecord> = {}): LeadRecord {
     updatedAt: "2026-01-01T00:00:00.000Z",
     followUpCount: 0,
     nextFollowUpAt: "",
-    isDemo: false,
     ...overrides,
   };
 }

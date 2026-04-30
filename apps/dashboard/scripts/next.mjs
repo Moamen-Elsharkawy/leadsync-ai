@@ -13,7 +13,7 @@ if (command === "dev" || command === "start") {
   args.push("-p", process.env.DASHBOARD_PORT || "3001");
 }
 
-if (command === "build") {
+if (command === "dev" || command === "build") {
   args.push("--webpack");
 }
 

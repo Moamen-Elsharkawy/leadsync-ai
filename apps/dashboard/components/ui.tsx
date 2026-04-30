@@ -96,15 +96,41 @@ export function EmptyState({
 export function ErrorState({
   title = "Unable to load dashboard data",
   description = "Check the Apps Script Web App URL, shared secret, and deployment access, then refresh the page.",
+  action,
 }: {
   title?: string;
   description?: string;
+  action?: React.ReactNode;
 }) {
   return (
     <div className="rounded-lg border border-red-100 bg-red-50 p-5 text-sm">
       <div className="font-semibold text-hot">{title}</div>
       <div className="mt-1 text-red-700">{description}</div>
+      {action ? <div className="mt-4">{action}</div> : null}
     </div>
+  );
+}
+
+export function DashboardDataError({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <ErrorState
+      title={title}
+      description={description}
+      action={
+        <a
+          href="/system-health"
+          className="inline-flex rounded-md bg-hot px-3 py-2 text-xs font-medium text-white"
+        >
+          Open System Health
+        </a>
+      }
+    />
   );
 }
 
@@ -131,8 +157,8 @@ export function LeadsTable({ leads }: { leads: LeadRecord[] }) {
   if (leads.length === 0) {
     return (
       <EmptyState
-        title="No leads found"
-        description="Try changing filters or seed demo data from Telegram."
+        title="No intake leads found"
+        description="Try clearing filters or seed the MoveWell demo data from the dashboard Demo page."
       />
     );
   }
@@ -142,12 +168,13 @@ export function LeadsTable({ leads }: { leads: LeadRecord[] }) {
       <table className="min-w-full text-left text-sm">
         <thead>
           <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
-            <th className="py-3 pr-3">Lead</th>
-            <th className="py-3 pr-3">Status</th>
+            <th className="py-3 pr-3">Intake</th>
+            <th className="py-3 pr-3">Priority</th>
             <th className="py-3 pr-3">Score</th>
             <th className="py-3 pr-3">Service</th>
+            <th className="py-3 pr-3">Branch</th>
             <th className="py-3 pr-3">Contact</th>
-            <th className="py-3 pr-3">Timeline</th>
+            <th className="py-3 pr-3">Visit timing</th>
             <th className="py-3 pr-3">Updated</th>
           </tr>
         </thead>
@@ -169,9 +196,14 @@ export function LeadsTable({ leads }: { leads: LeadRecord[] }) {
               <td className="py-3 pr-3 font-medium">{lead.leadScore}</td>
               <td className="py-3 pr-3">{lead.serviceRequested || "-"}</td>
               <td className="py-3 pr-3">
+                {lead.branch || lead.location || "-"}
+              </td>
+              <td className="py-3 pr-3">
                 {lead.phone || lead.telegramUsername || lead.telegramUserId}
               </td>
-              <td className="py-3 pr-3">{lead.timeline || "-"}</td>
+              <td className="py-3 pr-3">
+                {lead.preferredDate || lead.timeline || lead.urgency || "-"}
+              </td>
               <td className="py-3 pr-3 text-muted">
                 {formatDate(lead.updatedAt)}
               </td>

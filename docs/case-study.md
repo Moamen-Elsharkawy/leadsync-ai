@@ -1,74 +1,44 @@
-# SmartFlow AI Telegram Sales Agent Case Study
+# Case Study
+
+## SmartFlow Physical Therapy Intake System
+
+SmartFlow is a reusable AI intake and lead management engine, specialized in this repository for physical therapy centers. It can be presented as a client-ready system for clinics and therapy centers that receive repetitive customer inquiries through messaging channels.
 
 ## Problem
 
-Small businesses often receive customer inquiries through chat, but they lose context, forget follow-ups, and manually copy lead data into spreadsheets. A full CRM or database can be too heavy for an MVP.
+Physical therapy centers often receive Telegram or chat inquiries asking about branches, prices, appointments, home visits, post-surgery rehabilitation, sports injuries, and general details. Managers need a simple way to see which inquiries are urgent, which branch is most requested, and which customers need follow-up.
 
 ## Solution
 
-SmartFlow AI Telegram Sales Agent is a Telegram-based sales assistant that qualifies leads in Arabic and stores CRM data in Google Sheets through a Google Apps Script Web App.
+SmartFlow uses a Telegram bot to collect intake information in Arabic and stores all CRM data in Google Sheets through Apps Script. The manager uses a clean dashboard to review leads, conversations, follow-ups, reports, and system health.
 
-## Architecture
+## Why This Architecture
 
-- Telegram is the messaging channel.
-- OpenRouter is the AI provider.
-- Google Sheets is the CRM and storage layer.
-- Google Apps Script Web App is the only bridge to Sheets.
-- Node.js and TypeScript run the bot, follow-up worker, and admin dashboard.
+- Telegram is easy for customers.
+- Google Sheets is familiar for small businesses.
+- Apps Script avoids Google Cloud and service account setup.
+- OpenRouter keeps the AI model configurable.
+- No database keeps deployment and maintenance simple.
 
-The Node app never uses a direct Google Sheets API client, service account, credentials JSON, or database.
+## Safety
 
-## Core Workflow
+The AI assistant does not diagnose, provide treatment advice, recommend exercises or medication, estimate session counts, promise outcomes, quote final prices, or confirm appointments before staff review. It collects intake details and routes the lead to the team.
 
-1. A customer sends a Telegram message.
-2. The message is saved to the Messages sheet.
-3. The session is loaded from the Sessions sheet.
-4. OpenRouter extracts lead fields and intent.
-5. The bot asks one missing qualification question at a time.
-6. Qualified leads are classified as Hot, Warm, or Cold.
-7. Lead data is upserted into the Leads sheet.
-8. Warm leads can be queued for follow-up.
-9. Hot leads notify the admin.
-10. The owner can inspect leads through Telegram commands or the Express dashboard.
-11. The owner can use the Next.js dashboard for analytics, conversations, reports, follow-ups, demo controls, and system health.
+## Demo Business
 
-## Safety And Constraints
+MoveWell Physical Therapy Centers:
 
-- No database.
-- No Google Cloud setup.
-- No Service Account.
-- No credentials JSON.
-- No direct Google Sheets API usage from Node.js.
-- No standard OpenAI endpoint usage.
-- Secrets are loaded from environment variables and redacted in logs.
+- Nasr City Branch
+- Maadi Branch
+- New Cairo Branch
 
-## Demo Mode
-
-Demo Mode is designed for portfolio and sales walkthroughs:
-
-- Uses `BUSINESS_PRESET` to switch between custom, Physical Therapy, Dental Clinic, and Online Course versions.
-- Seeds 10 fake realistic leads for the selected business type.
-- Includes Arabic customer messages.
-- Marks all demo rows with `isDemo=true`.
-- Clears only demo rows.
-- Disables automatic customer follow-up sends.
-
-The productized presets make the project easier to sell as a vertical automation offer:
-
-- Physical Therapy AI Sales Agent for therapy centers, rehab clinics, and multi-branch local healthcare businesses.
-- Dental Clinic AI Sales Agent for clinics, dentists, orthodontists, and healthcare reception teams.
-- Online Course AI Sales Agent for academies, coaches, cohort programs, and training companies.
-
-For the physical therapy demo, SmartFlow collects intake details and routes leads to staff. It does not diagnose, provide treatment advice, recommend exercises, promise recovery outcomes, estimate required session counts, or confirm appointments before staff review.
+Demo services include back pain physiotherapy, neck pain physiotherapy, sports injury rehabilitation, post-surgery rehabilitation, knee pain treatment, shoulder rehabilitation, home physiotherapy, pediatric consultation, posture correction, and manual therapy inquiry.
 
 ## Business Value
 
-The MVP gives a small business:
-
-- Faster customer response.
-- Consistent lead qualification.
-- A spreadsheet CRM they already understand.
-- Owner-friendly Telegram admin commands.
-- A simple dashboard for pipeline visibility.
-- A professional web dashboard for client-ready analytics and reporting.
-- A deployable automation foundation without unnecessary infrastructure.
+- Faster response to inbound inquiries.
+- Better lead prioritization.
+- Centralized Google Sheets CRM.
+- Conversation history for staff review.
+- Follow-up queue for Warm or incomplete inquiries.
+- Dashboard analytics for branch demand and service mix.

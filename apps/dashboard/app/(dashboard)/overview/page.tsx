@@ -1,44 +1,60 @@
 import { AnalyticsCharts } from "../../../components/charts";
-import { Card, LeadsTable, Section } from "../../../components/ui";
+import {
+  Card,
+  DashboardDataError,
+  LeadsTable,
+  Section,
+} from "../../../components/ui";
 import { getDashboardService } from "../../../lib/data";
+import { classifyDashboardError } from "@smartflow/dashboard/errors";
 
 export default async function OverviewPage() {
   const service = getDashboardService();
-  const [summary, analytics, leads] = await Promise.all([
+  const loaded = await Promise.all([
     service.getDashboardSummary(),
     service.getLeadAnalytics(),
     service.getLeads({ limit: 20 }),
-  ]);
+  ])
+    .then(([summary, analytics, leads]) => ({
+      ok: true as const,
+      summary,
+      analytics,
+      leads,
+    }))
+    .catch((error) => ({ ok: false as const, error }));
+
+  if (!loaded.ok) {
+    const error = classifyDashboardError(loaded.error);
+    return (
+      <DashboardDataError title={error.title} description={error.description} />
+    );
+  }
+
+  const { summary, analytics, leads } = loaded;
 
   return (
     <>
       <div>
-        <h1 className="text-2xl font-semibold text-ink">Overview</h1>
+        <h1 className="text-2xl font-semibold text-ink">
+          Intake pipeline overview
+        </h1>
         <p className="mt-1 text-muted">
-          Live CRM analytics from Google Sheets through Apps Script.
+          MoveWell inquiry analytics from Google Sheets through Apps Script.
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card title="Total leads" value={summary.totalLeads} />
-        <Card title="Hot leads" value={summary.hotLeads} tone="hot" />
-        <Card title="Warm leads" value={summary.warmLeads} tone="warm" />
-        <Card title="Cold leads" value={summary.coldLeads} tone="cold" />
-        <Card title="Pending follow-ups" value={summary.pendingFollowUps} />
-        <Card title="Sent follow-ups" value={summary.sentFollowUps} />
-        <Card
-          title="Conversion rate"
-          value={`${summary.conversionRate}%`}
-          tone="good"
-        />
-        <Card title="Created today" value={summary.leadsCreatedToday} />
-        <Card title="Created this week" value={summary.leadsCreatedThisWeek} />
-        <Card title="Average lead score" value={summary.averageLeadScore} />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <Card title="Total Inquiries" value={summary.totalLeads} />
+        <Card title="Urgent (Hot)" value={summary.hotLeads} tone="hot" />
+        <Card title="Follow-up (Warm)" value={summary.warmLeads} tone="warm" />
+        <Card title="Low Priority (Cold)" value={summary.coldLeads} tone="cold" />
+        <Card title="Created Today" value={summary.leadsCreatedToday} />
+        <Card title="Pending Follow-ups" value={summary.pendingFollowUps} />
       </div>
 
       <AnalyticsCharts analytics={analytics} />
 
-      <Section title="Latest leads">
+      <Section title="Latest intake leads">
         <LeadsTable leads={leads} />
       </Section>
     </>

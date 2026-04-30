@@ -17,15 +17,16 @@ const requiredKeys = [
   "GOOGLE_SHEETS_WEBAPP_SECRET",
   "ADMIN_PORT",
   "ADMIN_PASSWORD",
-  "DEMO_MODE",
+
   "BOT_MODE",
   "BUSINESS_PRESET",
 ];
 
 export interface DashboardEnv {
   adminPassword: string;
+  adminPort: number;
   dashboardSecret: string;
-  demoMode: boolean;
+
   businessPreset: BusinessPreset;
   botMode: string;
   googleSheetsWebAppUrl: string;
@@ -41,8 +42,9 @@ export function loadDashboardEnv(): DashboardEnv {
 
   return {
     adminPassword,
+    adminPort: parsePort(process.env.ADMIN_PORT),
     dashboardSecret,
-    demoMode: parseBoolean(process.env.DEMO_MODE),
+
     businessPreset,
     botMode: process.env.BOT_MODE ?? "",
     googleSheetsWebAppUrl: process.env.GOOGLE_SHEETS_WEBAPP_URL ?? "",
@@ -53,18 +55,12 @@ export function loadDashboardEnv(): DashboardEnv {
   };
 }
 
+function parsePort(value: string | undefined): number {
+  const parsed = Number(value ?? "3000");
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 3000;
+}
+
 function parseBusinessPreset(value: string | undefined): BusinessPreset {
-  if (
-    value === "dental-clinic" ||
-    value === "online-course" ||
-    value === "physical-therapy"
-  ) {
-    return value;
-  }
-
-  return "custom";
+  return value === "physical-therapy" ? value : "physical-therapy";
 }
 
-function parseBoolean(value: string | undefined): boolean {
-  return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
-}

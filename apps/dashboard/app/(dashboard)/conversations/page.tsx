@@ -1,5 +1,11 @@
-import { EmptyState, Section, formatDate } from "../../../components/ui";
+import {
+  DashboardDataError,
+  EmptyState,
+  Section,
+  formatDate,
+} from "../../../components/ui";
 import { getDashboardService } from "../../../lib/data";
+import { classifyDashboardError } from "@smartflow/dashboard/errors";
 
 export default async function ConversationsPage({
   searchParams,
@@ -7,10 +13,22 @@ export default async function ConversationsPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const params = await searchParams;
-  const messages = await getDashboardService().getMessages({
-    leadId: params.leadId,
-    telegramUserId: params.telegramUserId,
-  });
+  const loaded = await getDashboardService()
+    .getMessages({
+      leadId: params.leadId,
+      telegramUserId: params.telegramUserId,
+    })
+    .then((messages) => ({ ok: true as const, messages }))
+    .catch((error) => ({ ok: false as const, error }));
+
+  if (!loaded.ok) {
+    const error = classifyDashboardError(loaded.error);
+    return (
+      <DashboardDataError title={error.title} description={error.description} />
+    );
+  }
+
+  const messages = loaded.messages;
 
   return (
     <>

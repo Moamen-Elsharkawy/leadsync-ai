@@ -27,7 +27,7 @@ export async function classifyLead(
   const result = await options.client.generateJson(
     prompts.systemPrompt,
     prompts.userPrompt,
-    "LeadClassification",
+    "PhysicalTherapyLeadClassification",
   );
 
   if (result.ok) {
@@ -67,7 +67,7 @@ export function fallbackClassifyLead(fields: LeadFields): LeadClassification {
       status: "Cold",
       leadScore: fields.intent === "support" ? 25 : 5,
       stage: "qualifying",
-      notes: `Fallback classification: ${fields.intent} intent is not a qualified sales lead.`,
+      notes: `Fallback classification: ${fields.intent} intent is not a qualified intake lead.`,
     };
   }
 
@@ -78,20 +78,24 @@ export function fallbackClassifyLead(fields: LeadFields): LeadClassification {
     score += 25;
   }
 
-  if (fields.budget) {
-    score += 20;
+  if (fields.branch || fields.location) {
+    score += 12;
   }
 
-  if (fields.timeline) {
+  if (fields.preferredDate || fields.timeline || fields.urgency) {
     score += 15;
   }
 
-  if (fields.phone) {
-    score += 10;
+  if (fields.phone || fields.contactPreference) {
+    score += 12;
   }
 
-  if (isUrgent(fields.timeline) || isHighIntent(fields.notes)) {
-    score += 20;
+  if (
+    isUrgent(fields.urgency) ||
+    isUrgent(fields.timeline) ||
+    isHighIntent(fields.notes)
+  ) {
+    score += 15;
   }
 
   if (isVague(fields)) {
@@ -107,7 +111,8 @@ export function fallbackClassifyLead(fields: LeadFields): LeadClassification {
     status,
     leadScore,
     stage,
-    notes: "Fallback classification based on collected lead fields.",
+    notes:
+      "Fallback classification based on physical therapy intake fields. Staff must review before confirming appointments or advice.",
   };
 }
 
@@ -117,12 +122,12 @@ function buildClassificationPrompts(options: LeadClassificationOptions): {
 } {
   return {
     systemPrompt: [
-      "Classify a small-business sales lead as Hot, Warm, or Cold.",
+      "Classify a physical therapy center intake lead as Hot, Warm, or Cold.",
       "Return only compact JSON with keys: status, leadScore, stage, notes.",
-      "Hot means: clear service need, wants to start soon, has budget or strong buying intent, and asks seriously for booking, call, quote, or price.",
-      "Warm means: interested but missing budget or timeline, asking general questions, or likely needs follow-up.",
+      "Hot means: clear therapy service or condition area, branch or location preference, wants contact/booking soon, has phone/contact method, or asks seriously for a call, appointment, branch availability, or price.",
+      "Warm means: interested but missing branch, contact method, or preferred timing; asking general questions or price without readiness.",
       "Cold means: vague, not ready, spam-like, support-only, or irrelevant.",
-      "Do not invent prices, guarantees, discounts, deadlines, availability, or booking confirmation.",
+      "Do not diagnose, give treatment advice, estimate sessions, promise outcomes, invent prices, or confirm appointments.",
     ].join(" "),
     userPrompt: JSON.stringify({
       fields: options.fields,
@@ -130,28 +135,30 @@ function buildClassificationPrompts(options: LeadClassificationOptions): {
       examples: [
         {
           input: {
-            serviceRequested: "Telegram bot",
-            timeline: "this week",
-            budget: "15000 EGP",
+            serviceRequested: "Back pain physiotherapy",
+            branch: "Nasr City Branch",
+            preferredDate: "tomorrow",
+            phone: "01044440001",
             intent: "buying",
           },
           output: {
             status: "Hot",
             leadScore: 90,
             stage: "qualified",
-            notes: "Clear service, near timeline, budget, and buying intent.",
+            notes:
+              "Clear service, branch, near timing, contact details, and buying intent.",
           },
         },
         {
           input: {
-            serviceRequested: "Website",
+            serviceRequested: "Manual therapy inquiry",
             intent: "asking",
           },
           output: {
             status: "Warm",
             leadScore: 50,
             stage: "qualifying",
-            notes: "Interested but missing timeline and budget.",
+            notes: "Interested but missing branch, timing, and contact method.",
           },
         },
       ],
@@ -181,7 +188,7 @@ function extractJsonObject(content: string): unknown {
 function isUrgent(value?: string): boolean {
   return Boolean(
     value &&
-    /(?:today|urgent|asap|now|اليوم|عاجل|حالا|حالاً|هذا الاسبوع|هذا الأسبوع)/iu.test(
+    /(?:today|tomorrow|urgent|asap|soon|now|النهارده|اليوم|بكرة|بكره|عاجل|حالا|حالًا|قريب)/iu.test(
       value,
     ),
   );
@@ -190,12 +197,18 @@ function isUrgent(value?: string): boolean {
 function isHighIntent(value?: string): boolean {
   return Boolean(
     value &&
-    /(?:buy|start|book|demo|quote|call|price|اشتري|ابدأ|نبدأ|احجز|تواصل|محتاج|عرض سعر|مكالمة|سعر)/iu.test(
+    /(?:book|booking|appointment|call|price|cost|reserve|احجز|حجز|موعد|كلموني|اتصال|مكالمة|سعر|تكلفة|محتاج|عايز|عاوز)/iu.test(
       value,
     ),
   );
 }
 
 function isVague(fields: LeadFields): boolean {
-  return !fields.serviceRequested && !fields.timeline && !fields.budget;
+  return (
+    !fields.serviceRequested &&
+    !fields.conditionArea &&
+    !fields.branch &&
+    !fields.timeline &&
+    !fields.preferredDate
+  );
 }

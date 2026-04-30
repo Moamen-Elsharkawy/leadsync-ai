@@ -1,5 +1,4 @@
-﻿import type { Context, Telegraf } from "telegraf";
-import type { BusinessPreset } from "../config/businessConfig.js";
+import type { Context, Telegraf } from "telegraf";
 import type { SheetsWebAppClient } from "../sheets/sheetsWebAppClient.js";
 import type { FollowUpService } from "../services/followUpService.js";
 import type { LeadService } from "../services/leadService.js";
@@ -16,7 +15,6 @@ export const NON_ADMIN_COMMAND_MESSAGE =
 
 export interface AdminCommandDeps {
   adminTelegramId?: string;
-  businessPreset?: BusinessPreset;
   sheets: SheetsWebAppClient;
   leadService: LeadService;
   followUpService: FollowUpService;
@@ -29,15 +27,15 @@ export function registerAdminCommands(
 ): void {
   bot.start((ctx) => {
     const text = isAdminContext(ctx, deps.adminTelegramId)
-      ? "SmartFlow admin is ready. Use /help to view commands."
-      : "أهلا بك. أرسل لنا تفاصيل الخدمة التي تحتاجها وسنساعدك خطوة بخطوة.";
+      ? "SmartFlow internal admin commands are available. The dashboard is the primary manager interface."
+      : "أهلا وسهلا بك في MoveWell لمراكز العلاج الطبيعي! 👋\nأقدر أساعدك في حجز جلسة أو الاستفسار عن خدماتنا. تحب تبدأ بإيه؟";
     return ctx.reply(text);
   });
 
   bot.help((ctx) => {
     if (!isAdminContext(ctx, deps.adminTelegramId)) {
       return ctx.reply(
-        "أرسل تفاصيل طلبك، وسأسألك عن أي معلومة ناقصة حتى نساعدك بشكل أفضل.",
+        "أرسل نوع الاستفسار والفرع المناسب ووقت التواصل، وسأسألك عن أي معلومة ناقصة.",
       );
     }
 
@@ -63,7 +61,7 @@ export function registerAdminCommands(
     "leads",
     adminOnly(deps, async (ctx) => {
       const leads = await deps.leadService.listLeads(LEAD_LIST_LIMIT);
-      await replyInChunks(ctx, formatLeadList("Latest leads", leads));
+      await replyInChunks(ctx, formatLeadList("Latest intake leads", leads));
     }),
   );
 
@@ -71,7 +69,7 @@ export function registerAdminCommands(
     "hot",
     adminOnly(deps, async (ctx) => {
       const leads = await deps.leadService.listHotLeads(LEAD_LIST_LIMIT);
-      await replyInChunks(ctx, formatLeadList("Latest Hot leads", leads));
+      await replyInChunks(ctx, formatLeadList("Latest urgent leads", leads));
     }),
   );
 
@@ -79,7 +77,7 @@ export function registerAdminCommands(
     "warm",
     adminOnly(deps, async (ctx) => {
       const leads = await deps.leadService.listWarmLeads(LEAD_LIST_LIMIT);
-      await replyInChunks(ctx, formatLeadList("Latest Warm leads", leads));
+      await replyInChunks(ctx, formatLeadList("Latest follow-up leads", leads));
     }),
   );
 
@@ -87,7 +85,10 @@ export function registerAdminCommands(
     "cold",
     adminOnly(deps, async (ctx) => {
       const leads = await deps.leadService.listColdLeads(LEAD_LIST_LIMIT);
-      await replyInChunks(ctx, formatLeadList("Latest Cold leads", leads));
+      await replyInChunks(
+        ctx,
+        formatLeadList("Latest low-priority leads", leads),
+      );
     }),
   );
 
@@ -107,51 +108,7 @@ export function registerAdminCommands(
     }),
   );
 
-  bot.command(
-    "demo",
-    adminOnly(deps, async (ctx) => {
-      const preset = deps.businessPreset ?? "custom";
-      const result = await deps.sheets.seedDemoData(preset);
-      await ctx.reply(formatDemoSeedResult(result, preset));
-    }),
-  );
 
-  bot.command(
-    "demo_dental",
-    adminOnly(deps, async (ctx) => {
-      const preset = "dental-clinic";
-      const result = await deps.sheets.seedDemoData(preset);
-      await ctx.reply(formatDemoSeedResult(result, preset));
-    }),
-  );
-
-  bot.command(
-    "demo_course",
-    adminOnly(deps, async (ctx) => {
-      const preset = "online-course";
-      const result = await deps.sheets.seedDemoData(preset);
-      await ctx.reply(formatDemoSeedResult(result, preset));
-    }),
-  );
-
-  bot.command(
-    "demo_physical",
-    adminOnly(deps, async (ctx) => {
-      const preset = "physical-therapy";
-      const result = await deps.sheets.seedDemoData(preset);
-      await ctx.reply(formatDemoSeedResult(result, preset));
-    }),
-  );
-
-  bot.command(
-    "clear_demo",
-    adminOnly(deps, async (ctx) => {
-      const result = await deps.sheets.clearDemoData();
-      await ctx.reply(
-        `Demo data cleared. Deleted rows: ${result.deletedRows ?? "unknown"}`,
-      );
-    }),
-  );
 
   bot.hears(
     /^\/lead_(.+)$/i,
@@ -224,10 +181,10 @@ export function formatLeadList(title: string, leads: LeadRecord[]): string {
       [
         `${index + 1}. ${lead.status} (${lead.leadScore}) - ${lead.leadId}`,
         `Service: ${valueOrDash(lead.serviceRequested)}`,
+        `Branch: ${valueOrDash(lead.branch || lead.location)}`,
         `Name: ${valueOrDash(lead.fullName)}`,
         `Phone: ${valueOrDash(lead.phone)}`,
-        `Timeline: ${valueOrDash(lead.timeline)}`,
-        `Budget: ${valueOrDash(lead.budget)}`,
+        `Visit timing: ${valueOrDash(lead.preferredDate || lead.timeline)}`,
         `Updated: ${valueOrDash(lead.updatedAt)}`,
       ].join("\n"),
     ),
@@ -247,9 +204,12 @@ export function formatLeadDetails(lead: LeadRecord): string {
     `Phone: ${valueOrDash(lead.phone)}`,
     "",
     `Service: ${valueOrDash(lead.serviceRequested)}`,
-    `Budget: ${valueOrDash(lead.budget)}`,
-    `Timeline: ${valueOrDash(lead.timeline)}`,
-    `Location: ${valueOrDash(lead.location)}`,
+    `Branch: ${valueOrDash(lead.branch || lead.location)}`,
+    `Condition area: ${valueOrDash(lead.conditionArea)}`,
+    `Urgency: ${valueOrDash(lead.urgency)}`,
+    `Preferred date: ${valueOrDash(lead.preferredDate || lead.timeline)}`,
+    `Preferred time: ${valueOrDash(lead.preferredTime)}`,
+    `Contact preference: ${valueOrDash(lead.contactPreference)}`,
     "",
     `Last question: ${valueOrDash(lead.lastQuestionAsked)}`,
     `Follow-up count: ${lead.followUpCount}`,
@@ -293,59 +253,29 @@ export function formatReportSummary(summary: {
   coldLeads: number;
 }): string {
   return [
-    "Lead report",
+    "MoveWell intake report",
     `Total leads: ${summary.totalLeads}`,
-    `Hot leads: ${summary.hotLeads}`,
-    `Warm leads: ${summary.warmLeads}`,
-    `Cold leads: ${summary.coldLeads}`,
+    `Urgent leads: ${summary.hotLeads}`,
+    `Follow-up leads: ${summary.warmLeads}`,
+    `Low-priority leads: ${summary.coldLeads}`,
   ].join("\n");
 }
 
 function formatAdminHelp(): string {
   return [
-    "Admin commands",
-    "/leads - show latest 10 leads",
-    "/hot - show latest Hot leads",
-    "/warm - show latest Warm leads",
-    "/cold - show latest Cold leads",
+    "Internal Telegram admin fallback",
+    "The web dashboard is the primary manager interface.",
+    "/leads - show latest 10 intake leads",
+    "/hot - show latest urgent leads",
+    "/warm - show latest follow-up leads",
+    "/cold - show latest low-priority leads",
     "/report - show summary report",
     "/followups - show pending follow-ups",
     "/lead_<id> - show full lead details",
     "/setup_sheets - create missing sheets and headers",
-    "/demo - seed demo data for the active business preset",
-    "/demo_dental - seed Dental Clinic demo data",
-    "/demo_course - seed Online Course demo data",
-    "/demo_physical - seed Physical Therapy demo data",
-    "/clear_demo - clear demo data only",
   ].join("\n");
 }
 
-function formatDemoSeedResult(
-  result: { createdLeads?: number; createdMessages?: number; preset?: string },
-  requestedPreset: BusinessPreset,
-): string {
-  return [
-    `Demo data seeded for ${formatPresetName(result.preset ?? requestedPreset)}.`,
-    `Leads: ${result.createdLeads ?? "unknown"}`,
-    `Messages: ${result.createdMessages ?? "unknown"}`,
-  ].join("\n");
-}
-
-function formatPresetName(preset: string): string {
-  if (preset === "dental-clinic") {
-    return "Dental Clinic";
-  }
-
-  if (preset === "online-course") {
-    return "Online Course";
-  }
-
-  if (preset === "physical-therapy") {
-    return "Physical Therapy";
-  }
-
-  return "Custom Business";
-}
 
 function sortLatestLeads(leads: LeadRecord[]): LeadRecord[] {
   return [...leads].sort((a, b) => {

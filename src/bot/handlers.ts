@@ -4,7 +4,10 @@ import type { BusinessConfig } from "../config/businessConfig.js";
 import { classifyLead } from "../ai/leadClassifier.js";
 import { extractLeadInfo } from "../ai/leadExtractor.js";
 import type { OpenRouterClient } from "../ai/openRouterClient.js";
-import { generateArabicReply } from "../ai/replyGenerator.js";
+import {
+  generateArabicReply,
+  type ConversationStage,
+} from "../ai/replyGenerator.js";
 import type { FollowUpService } from "../services/followUpService.js";
 import {
   buildLeadRecord,
@@ -23,6 +26,7 @@ import {
   safeTelegramReply,
   safeTelegramSendMessage,
 } from "../utils/telegram.js";
+import { decideConversationPolicy } from "./conversationPolicy.js";
 
 export interface MessageHandlerDeps {
   aiClient: OpenRouterClient;
@@ -32,7 +36,6 @@ export interface MessageHandlerDeps {
   leadService: LeadService;
   followUpService: FollowUpService;
   adminTelegramId?: string;
-  demoMode?: boolean;
 }
 
 export function registerMessageHandlers(
@@ -50,6 +53,11 @@ export function registerMessageHandlers(
     const leadId = createLeadId(telegramUserId);
 
     try {
+      // Show typing indicator while processing
+      await ctx.sendChatAction("typing").catch(() => {
+        /* ignore typing errors */
+      });
+
       await deps.messageService.appendMessage({
         leadId,
         telegramUserId,
@@ -61,11 +69,61 @@ export function registerMessageHandlers(
 
       const session =
         await deps.sessionService.getOrCreateSession(telegramUserId);
+      const allowGreeting =
+        session.currentStep === "new" &&
+        !session.lastQuestionAsked &&
+        Object.keys(session.collectedFields).length === 0;
+      const policy = decideConversationPolicy(text, telegramUserId, {
+        allowGreeting,
+      });
+
+      // Handle greeting responses
+      if (policy.action === "greeting") {
+        const sent = await safeTelegramReply(ctx, policy.reply, {
+          telegramUserId,
+          leadId,
+          purpose: "greeting",
+        });
+        if (sent.ok) {
+          await deps.messageService.appendMessage({
+            leadId,
+            telegramUserId,
+            direction: "outbound",
+            text: policy.reply,
+            telegramMessageId: sent.messageId,
+          });
+        }
+        return;
+      }
+
+      if (policy.action === "safe-refusal") {
+        const sent = await safeTelegramReply(ctx, policy.reply, {
+          telegramUserId,
+          leadId,
+          purpose: "safe_refusal",
+        });
+        if (sent.ok) {
+          await deps.messageService.appendMessage({
+            leadId,
+            telegramUserId,
+            direction: "outbound",
+            text: policy.reply,
+            telegramMessageId: sent.messageId,
+          });
+        }
+        return;
+      }
+
+      const recentMessages = await deps.messageService.listRecentMessages(
+        telegramUserId,
+        10,
+      );
       const extraction = await extractLeadInfo({
         client: deps.aiClient,
         messageText: text,
         existingFields: session.collectedFields,
         businessConfig: deps.businessConfig,
+        recentMessages,
       });
       const fields = extraction.merged;
       const contact = {
@@ -78,12 +136,25 @@ export function registerMessageHandlers(
         contact,
         deps.businessConfig,
         session.lastQuestionAsked,
+        session.questionAskCount,
       );
 
+      // Determine conversation stage for context-aware replies
+      const conversationStage: ConversationStage = nextQuestion
+        ? "qualifying"
+        : "qualified";
+
       if (nextQuestion) {
+        // Track if we're asking the same question again
+        const isSameQuestion =
+          session.lastQuestionAsked === nextQuestion.question;
+
         session.currentStep = "qualifying";
         session.collectedFields = fields;
         session.lastQuestionAsked = nextQuestion.question;
+        session.questionAskCount = isSameQuestion
+          ? session.questionAskCount + 1
+          : 0;
         session.lastMessageAt = nowIso();
         session.updatedAt = nowIso();
         await deps.sessionService.saveSession(session);
@@ -92,7 +163,16 @@ export function registerMessageHandlers(
           telegramUserId,
         });
 
-        const sent = await safeTelegramReply(ctx, nextQuestion.question, {
+        const reply = await generateArabicReply({
+          client: deps.aiClient,
+          businessConfig: deps.businessConfig,
+          fields,
+          missingQuestion: nextQuestion.question,
+          latestCustomerMessage: text,
+          recentMessages,
+          conversationStage,
+        });
+        const sent = await safeTelegramReply(ctx, reply, {
           telegramUserId,
           leadId,
           purpose: "qualification_question",
@@ -102,29 +182,44 @@ export function registerMessageHandlers(
             leadId,
             telegramUserId,
             direction: "outbound",
-            text: nextQuestion.question,
+            text: reply,
             telegramMessageId: sent.messageId,
           });
         }
         return;
       }
 
+      // Lead is fully qualified — classify and save
       const classification = await classifyLead({
         client: deps.aiClient,
         fields,
-        rawMessages: [text],
+        rawMessages: recentMessages.map((item) => item.text).concat(text),
       });
       const existingLead =
         await deps.leadService.getLeadByTelegramUserId(telegramUserId);
+
+      // If lead is already qualified and status hasn't changed, skip re-saving
+      // to avoid unnecessary API calls and potential downgrade
+      const shouldUpdateLead =
+        !existingLead ||
+        existingLead.status !== classification.status ||
+        hasNewFields(existingLead, fields);
+
       const lead = buildLeadRecord({
         telegramUserId,
         telegramUsername,
         fields,
-        classification,
+        classification: shouldUpdateLead
+          ? classification
+          : {
+              status: existingLead!.status,
+              leadScore: existingLead!.leadScore,
+              stage: existingLead!.stage,
+              notes: existingLead!.notes,
+            },
         lastQuestionAsked: session.lastQuestionAsked,
         existingLead,
         latestMessageText: text,
-        isDemo: deps.demoMode,
       });
       const savedLead = await deps.leadService.upsertLead(lead);
 
@@ -135,6 +230,7 @@ export function registerMessageHandlers(
       session.currentStep = "qualified";
       session.collectedFields = fields;
       session.lastQuestionAsked = "";
+      session.questionAskCount = 0;
       session.lastMessageAt = nowIso();
       session.updatedAt = nowIso();
       await deps.sessionService.saveSession(session);
@@ -144,6 +240,9 @@ export function registerMessageHandlers(
         businessConfig: deps.businessConfig,
         fields,
         classification,
+        latestCustomerMessage: text,
+        recentMessages,
+        conversationStage,
       });
       const sent = await safeTelegramReply(ctx, reply, {
         telegramUserId,
@@ -203,4 +302,36 @@ export function registerMessageHandlers(
       }
     }
   });
+}
+
+/**
+ * Check if extracted fields contain new information compared to existing lead.
+ */
+function hasNewFields(
+  existingLead: {
+    serviceRequested: string;
+    branch?: string;
+    phone: string;
+    fullName: string;
+  },
+  fields: {
+    serviceRequested?: string;
+    branch?: string;
+    phone?: string;
+    fullName?: string;
+  },
+): boolean {
+  if (fields.serviceRequested && fields.serviceRequested !== existingLead.serviceRequested) {
+    return true;
+  }
+  if (fields.branch && fields.branch !== existingLead.branch) {
+    return true;
+  }
+  if (fields.phone && fields.phone !== existingLead.phone) {
+    return true;
+  }
+  if (fields.fullName && fields.fullName !== existingLead.fullName) {
+    return true;
+  }
+  return false;
 }

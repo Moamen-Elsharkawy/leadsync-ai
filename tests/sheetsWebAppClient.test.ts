@@ -165,49 +165,7 @@ describe("SheetsWebAppClient", () => {
     });
   });
 
-  it("passes dental clinic preset when seeding demo data", async () => {
-    const fetchMock = mockFetchResponse({
-      seeded: true,
-      preset: "dental-clinic",
-      createdLeads: 10,
-      createdMessages: 30,
-    });
-    const client = new SheetsWebAppClient({
-      webAppUrl: "https://script.google.com/macros/s/test/exec",
-      secret: "shared-secret",
-      fetchImpl: fetchMock as unknown as typeof fetch,
-    });
-
-    await client.seedDemoData("dental-clinic");
-    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
-
-    expect(body).toEqual({
-      action: "seedDemoData",
-      secret: "shared-secret",
-      payload: { preset: "dental-clinic" },
-    });
-  });
-
-  it("passes online course preset when seeding demo data", async () => {
-    const fetchMock = mockFetchResponse({
-      seeded: true,
-      preset: "online-course",
-      createdLeads: 10,
-      createdMessages: 30,
-    });
-    const client = new SheetsWebAppClient({
-      webAppUrl: "https://script.google.com/macros/s/test/exec",
-      secret: "shared-secret",
-      fetchImpl: fetchMock as unknown as typeof fetch,
-    });
-
-    await client.seedDemoData("online-course");
-    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
-
-    expect(body.payload).toEqual({ preset: "online-course" });
-  });
-
-  it("passes physical therapy preset when seeding demo data", async () => {
+  it("seeds physical therapy demo data without extra selection payload", async () => {
     const fetchMock = mockFetchResponse({
       seeded: true,
       preset: "physical-therapy",
@@ -220,10 +178,14 @@ describe("SheetsWebAppClient", () => {
       fetchImpl: fetchMock as unknown as typeof fetch,
     });
 
-    await client.seedDemoData("physical-therapy");
+    await client.seedDemoData();
     const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
 
-    expect(body.payload).toEqual({ preset: "physical-therapy" });
+    expect(body).toEqual({
+      action: "seedDemoData",
+      secret: "shared-secret",
+      payload: {},
+    });
   });
 
   it("lists messages with dashboard filters through Apps Script", async () => {
@@ -278,6 +240,68 @@ describe("SheetsWebAppClient", () => {
       settings: [{ key: "timezone", value: "Africa/Cairo" }],
       summary: { totalLeads: 0 },
     });
+  });
+
+  it("calls Apps Script diagnostics and validates the response", async () => {
+    const fetchMock = mockFetchResponse({
+      ok: true,
+      version: "2026-04-26-therapy-hardening",
+      spreadsheetName: "MoveWell CRM",
+      secretInitialized: true,
+      actions: ["diagnostics", "setup", "seedDemoData"],
+      tabs: {
+        Leads: {
+          exists: true,
+          rowCount: 1,
+          columnCount: 24,
+          missingHeaders: [],
+        },
+      },
+      missingTabs: [],
+      missingHeaders: {},
+      needsSetup: false,
+      timestamp: "2026-04-26T00:00:00.000Z",
+    });
+    const client = new SheetsWebAppClient({
+      webAppUrl: "https://script.google.com/macros/s/test/exec",
+      secret: "shared-secret",
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    const result = await client.diagnostics();
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
+
+    expect(result.version).toBe("2026-04-26-therapy-hardening");
+    expect(result.needsSetup).toBe(false);
+    expect(body).toEqual({
+      action: "diagnostics",
+      secret: "shared-secret",
+      payload: {},
+    });
+  });
+
+  it("treats unsupported diagnostics as an old Apps Script deployment", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        ok: false,
+        error: {
+          message: "Unsupported action: diagnostics",
+          code: "UNSUPPORTED_ACTION",
+        },
+      }),
+    });
+    const client = new SheetsWebAppClient({
+      webAppUrl: "https://script.google.com/macros/s/test/exec",
+      secret: "shared-secret",
+      fetchImpl: fetchMock as unknown as typeof fetch,
+      maxRetries: 0,
+    });
+
+    await expect(client.diagnostics()).rejects.toThrow(
+      "Unsupported action: diagnostics",
+    );
   });
 
   it("logs failures without leaking the shared secret", async () => {

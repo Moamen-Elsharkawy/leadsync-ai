@@ -1,286 +1,140 @@
-# SmartFlow AI Telegram Sales Agent
+# SmartFlow Physical Therapy Intake System
 
-Production-quality MVP for a Telegram AI sales assistant. The bot uses Telegram for messaging, OpenRouter for AI, Google Sheets as the CRM, and a Google Apps Script Web App as the only bridge to Sheets.
+SmartFlow is a production-ready MVP for physical therapy centers. Customers send inquiries through Telegram, the AI assistant replies in Arabic, and the center manager reviews intake leads, conversations, follow-ups, and reports from a professional web dashboard.
+
+The demo business is **MoveWell Physical Therapy Centers** with branches in Nasr City, Maadi, and New Cairo.
+
+## What It Does
+
+- Collects physical therapy intake details from Telegram conversations.
+- Extracts service, branch, condition area, urgency, preferred date/time, phone, and contact preference.
+- Classifies inquiries as `Hot`, `Warm`, or `Cold`.
+- Stores leads, sessions, messages, follow-ups, reports, and settings in Google Sheets.
+- Gives the manager a dashboard for analytics, lead review, follow-up visibility, conversations, demo data, and system health.
+- Avoids diagnosis, treatment advice, exercises, medication, session-count promises, outcome guarantees, final pricing, and appointment confirmation before staff review.
 
 ## Architecture
 
-- Node.js + TypeScript app
-- Telegraf Telegram bot in polling mode
+- Telegram is the customer messaging channel.
+- OpenRouter is the only AI provider.
+- Google Sheets is the CRM/storage layer.
+- Google Apps Script Web App is the only bridge between Node.js and Google Sheets.
+- The manager uses the Next.js dashboard. Telegram admin commands remain only as an internal fallback.
+
+No database, SQLite, Prisma, Postgres, Supabase, Airtable, Firebase, Google Cloud service account, Google Sheets API credentials, or credentials JSON are used.
+
+## Tech Stack
+
+- Node.js + TypeScript
+- Telegraf
 - OpenAI SDK configured for OpenRouter
-- Google Apps Script Web App using the active spreadsheet
-- Google Sheets tabs: `Leads`, `Sessions`, `Messages`, `FollowUps`, `Reports`, `Settings`
-- Express admin API and simple dashboard
-- Professional Next.js web dashboard under `apps/dashboard`
-- Cron-based follow-up sender
+- Google Apps Script Web App
+- Google Sheets
+- Next.js + Tailwind CSS + Recharts dashboard
+- Express legacy health/admin API
+- node-cron follow-ups
+- Vitest tests
 
-No Google Cloud service account, no Google Sheets API credentials, and no database are used.
+## Google Sheets Tabs
 
-## Local Setup
+The Apps Script `setup` action creates or verifies these tabs while preserving existing rows:
 
-1. Install dependencies:
+- `Leads`
+- `Sessions`
+- `Messages`
+- `FollowUps`
+- `Reports`
+- `Settings`
 
-   ```bash
-   npm install
-   ```
+Physical therapy lead columns include `branch`, `conditionArea`, `urgency`, `preferredDate`, `preferredTime`, and `contactPreference`. If you previously used older generic columns, setup will add missing new headers without deleting real data. For a clean sheet with only the current columns, create a new Google Sheet and deploy the updated Apps Script there.
 
-2. Copy environment values:
+## Environment Setup
 
-   ```bash
-   cp .env.example .env
-   ```
-
-3. Fill `.env` with:
-   - `TELEGRAM_BOT_TOKEN`
-   - `OPENROUTER_API_KEY`
-   - `OPENROUTER_MODEL`
-   - `OPENROUTER_SITE_URL`
-   - `OPENROUTER_APP_NAME`
-   - `OPENROUTER_TIMEOUT_MS`
-   - `OPENROUTER_MAX_RETRIES`
-   - `ADMIN_TELEGRAM_ID`
-   - `GOOGLE_SHEETS_WEBAPP_URL`
-   - `GOOGLE_SHEETS_WEBAPP_SECRET`
-   - `ADMIN_PASSWORD`
-   - `BUSINESS_PRESET`
-   - `DEMO_MODE`
-
-4. Complete the **Google Apps Script Setup** section below.
-
-5. Run locally:
-
-   ```bash
-   npm run dev
-   ```
-
-The admin dashboard runs at `http://localhost:3000/dashboard?password=YOUR_ADMIN_PASSWORD` unless `ADMIN_PORT` is changed.
-
-The professional web dashboard runs separately at `http://localhost:3001/login`:
+Copy `.env.example` to `.env` and fill the values:
 
 ```bash
-npm --prefix apps/dashboard install
-npm run dashboard:dev
+TELEGRAM_BOT_TOKEN=123456:replace-with-token
+OPENROUTER_API_KEY=sk-or-v1-replace-with-key
+OPENROUTER_MODEL=openai/gpt-4o-mini
+OPENROUTER_SITE_URL=http://localhost:3000
+OPENROUTER_APP_NAME=SmartFlow Physical Therapy Intake System
+ADMIN_TELEGRAM_ID=123456789
+GOOGLE_SHEETS_WEBAPP_URL=https://script.google.com/macros/s/replace/exec
+GOOGLE_SHEETS_WEBAPP_SECRET=replace-with-shared-secret
+ADMIN_PORT=3000
+ADMIN_PASSWORD=replace-with-admin-password
+DASHBOARD_PORT=3001
+DASHBOARD_SECRET=replace-with-dashboard-secret
+BUSINESS_PRESET=physical-therapy
+DEMO_MODE=true
+BOT_MODE=polling
 ```
 
-## Demo Script
+Do not hardcode secrets in source files. `.env` is ignored by git.
 
-Use Demo Mode when presenting the project to clients, recruiters, or on a portfolio page. Demo Mode marks all new bot-created leads as demo leads, seeds safe fake Arabic leads for the active `BUSINESS_PRESET`, and disables automatic customer follow-up sends. Admin notifications still work, so Hot lead alerts can be shown safely.
+## Telegram Setup
 
-1. Set this in `.env`:
-
-   ```bash
-   BUSINESS_PRESET=dental-clinic
-   DEMO_MODE=true
-   ```
-
-   Use `BUSINESS_PRESET=physical-therapy` for the MoveWell therapy demo or `BUSINESS_PRESET=online-course` to switch to the course business version.
-
-2. Start the app:
-
-   ```bash
-   npm run dev
-   ```
-
-3. In Telegram, send `/setup_sheets` as the admin user to verify the spreadsheet tabs and headers.
-
-4. Send `/demo` as the admin user. This seeds 10 realistic fake leads for the active preset, sessions, reports, pending Warm follow-ups, and Arabic customer messages into Google Sheets through the Apps Script Web App.
-
-5. Open the dashboard:
-
-   ```text
-   http://localhost:3000/dashboard?password=YOUR_ADMIN_PASSWORD
-   ```
-
-6. Show the workflow:
-   - `/leads` to list the latest pipeline.
-   - `/hot` to show urgent opportunities.
-   - `/lead_lead_demo_physical_therapy_001`, `/lead_lead_demo_dental_clinic_001`, or `/lead_lead_demo_online_course_001` to inspect a full demo lead.
-   - `/report` to show Hot/Warm/Cold counts.
-   - The Google Sheet tabs to prove the system uses Sheets as the CRM.
-
-7. Send one of the Arabic sample messages from `docs/demo-conversations.md` to the bot from a non-admin Telegram account and show the qualification flow.
-
-8. Send `/clear_demo` as the admin user when finished. This calls the Apps Script `clearDemoData` action and deletes only rows where `isDemo` is true.
-
-Suggested portfolio materials:
-
-- `docs/demo-conversations.md` contains safe demo conversations.
-- `docs/dental-clinic-demo.md` contains the Dental Clinic walkthrough.
-- `docs/online-course-demo.md` contains the Online Course walkthrough.
-- `docs/linkedin-post.md` contains ready-to-edit LinkedIn launch copy.
-
-## Google Apps Script Setup
-
-This integration does not use Google Cloud, Service Accounts, Google Sheets API credentials, or credentials JSON.
-
-1. Create a Google Sheet.
-
-2. Open **Extensions -> Apps Script** from that Google Sheet.
-
-3. Paste the full contents of `google-apps-script/Code.gs`.
-
-4. Save the Apps Script project.
-
-5. Run `initSecret` once through the Node script or HTTP request. This requires the deployed Web App URL, so complete steps 6-10 first, then run either:
-
-   ```bash
-   npm run init:secret
-   ```
-
-   Or send the HTTP request directly:
-
-   ```bash
-   curl -X POST "$GOOGLE_SHEETS_WEBAPP_URL" \
-     -H "Content-Type: application/json" \
-     -d "{\"action\":\"initSecret\",\"secret\":\"$GOOGLE_SHEETS_WEBAPP_SECRET\"}"
-   ```
-
-6. Deploy as Web App.
-
-7. Set **Execute as** to **Me**.
-
-8. Set **Who has access** to **Anyone**.
-
-9. Copy the Web App URL.
-
-10. Put it in `.env` as `GOOGLE_SHEETS_WEBAPP_URL`, and set the same secret in `GOOGLE_SHEETS_WEBAPP_SECRET`.
-
-11. Run:
-
-```bash
-npm run setup:sheets
-```
-
-The `setup` action creates missing tabs and headers while preserving existing spreadsheet data.
+1. Open Telegram and message `@BotFather`.
+2. Create a bot with `/newbot`.
+3. Copy the bot token into `TELEGRAM_BOT_TOKEN`.
+4. Keep `BOT_MODE=polling` for local development.
+5. Customers interact with this bot. The manager does not need Telegram for administration.
 
 ## OpenRouter Setup
 
-This project uses OpenRouter through the official `openai` npm package. Configure only `OPENROUTER_API_KEY`; do not configure a separate standard OpenAI API key variable.
+This project uses the official `openai` npm package with:
 
-1. Create an OpenRouter API key.
-
-2. Add these values to `.env`:
-
-   ```bash
-   OPENROUTER_API_KEY=sk-or-v1-your-key
-   OPENROUTER_MODEL=openai/gpt-4o-mini
-   OPENROUTER_SITE_URL=http://localhost:3000
-   OPENROUTER_APP_NAME=SmartFlow AI Telegram Sales Agent
-   OPENROUTER_TIMEOUT_MS=12000
-   OPENROUTER_MAX_RETRIES=1
-   ```
-
-3. Change `OPENROUTER_MODEL` whenever you want to switch models.
-
-4. `OPENROUTER_SITE_URL` and `OPENROUTER_APP_NAME` are optional OpenRouter attribution headers.
-
-5. If OpenRouter is unavailable, the bot uses deterministic fallback extraction, classification, and Arabic replies so the conversation can continue.
-
-## Business Configuration
-
-The bot is reusable across businesses through `BUSINESS_PRESET`.
-
-- `BUSINESS_PRESET=custom` loads `config/business.json`.
-- `BUSINESS_PRESET=physical-therapy` loads `config/examples/physical-therapy.json`.
-- `BUSINESS_PRESET=dental-clinic` loads `config/examples/dental-clinic.json`.
-- `BUSINESS_PRESET=online-course` loads `config/examples/online-course-business.json`.
-
-Use `custom` when editing your own business config. The preset files are productized portfolio versions for a physical therapy center, a dental clinic, and an online course business.
-
-Required top-level fields:
-
-- `businessName`
-- `businessType`
-- `services`
-- `workingHours`
-- `tone`
-- `language`
-- `unavailableDays`
-- `adminContact`
-- `qualificationQuestions`
-- `forbiddenClaims`
-
-The AI reply generator uses this config in every customer reply. It is instructed to reply in Arabic only, mention only services listed in `services`, respect `forbiddenClaims`, and avoid inventing prices, guarantees, deadlines, discounts, availability, or booking confirmations.
-
-Example configs are available in:
-
-- `config/examples/dental-clinic.json`
-- `config/examples/marketing-agency.json`
-- `config/examples/online-course-business.json`
-- `config/examples/physical-therapy.json`
-
-To switch businesses:
-
-1. Set `BUSINESS_PRESET` in `.env`.
-2. Keep `language` as `ar` for Arabic customer replies.
-3. Update `services` to only the services this business actually offers.
-4. Update `qualificationQuestions` with Arabic questions.
-5. Add sensitive claims to `forbiddenClaims`.
-6. Restart the app with `npm run dev`.
-
-No code changes, database, Google Cloud setup, Service Account, or Google Sheets API credentials are required.
-
-## Bot Commands
-
-- `/start` - customer welcome
-- `/help` - command help
-- `/leads` - list recent leads
-- `/hot` - list hot leads
-- `/warm` - list warm leads
-- `/cold` - list cold leads
-- `/report` - show report summary
-- `/followups` - show follow-ups
-- `/lead_<id>` - show one lead
-- `/setup_sheets` - create missing sheets and headers
-- `/demo` - seed demo data for the active business preset
-- `/demo_dental` - seed Dental Clinic demo data
-- `/demo_course` - seed Online Course demo data
-- `/demo_physical` - seed Physical Therapy demo data
-- `/clear_demo` - clear demo data
-
-Admin-only commands require `ADMIN_TELEGRAM_ID`.
-
-## Admin Dashboard And API
-
-The Express admin server starts with the bot on `ADMIN_PORT`. It is kept as a legacy lightweight dashboard and JSON API. It reads all CRM data through the Apps Script Web App client; no database or Google API credentials are used.
-
-Set these values in `.env`:
-
-```bash
-ADMIN_PORT=3000
-ADMIN_PASSWORD=replace-with-admin-password
+```ts
+baseURL: "https://openrouter.ai/api/v1";
+apiKey: process.env.OPENROUTER_API_KEY;
 ```
 
-Routes:
+Only `OPENROUTER_API_KEY` is used. The model is controlled by `OPENROUTER_MODEL`. `OPENROUTER_SITE_URL` and `OPENROUTER_APP_NAME` are optional OpenRouter attribution headers.
 
-- `GET /health` - public health check
-- `GET /dashboard?password=ADMIN_PASSWORD` - simple HTML dashboard
-- `GET /leads?password=ADMIN_PASSWORD` - latest leads as JSON
-- `GET /leads/hot?password=ADMIN_PASSWORD` - Hot leads as JSON
-- `GET /leads/:id?password=ADMIN_PASSWORD` - one lead as JSON
-- `GET /report?password=ADMIN_PASSWORD` - summary report as JSON
+If OpenRouter fails, the bot falls back to deterministic extraction, classification, and safe Arabic replies.
 
-You can also authenticate with the `x-admin-password` header or HTTP Basic auth.
+## Google Apps Script Setup
 
-## Professional Web Dashboard
-
-A client-ready Next.js dashboard is available in `apps/dashboard`.
-
-Features:
-
-- Server-side admin login with `ADMIN_PASSWORD`
-- Overview KPIs and Recharts analytics
-- Leads table with search, filters, sorting, badges, and lead details
-- Chat-style conversation viewer from the Messages sheet
-- Follow-up queue visibility from the FollowUps sheet
-- Reports page with copy, print, and CSV export
-- Read-only business settings page
-- Demo controls for seeding and clearing demo data
-- System health page that shows env presence without exposing values
-
-Run it:
+1. Create a Google Sheet.
+2. Open **Extensions -> Apps Script**.
+3. Paste the full contents of `google-apps-script/Code.gs`.
+4. Save the Apps Script project.
+5. Deploy as Web App.
+6. Set **Execute as** to **Me**.
+7. Set **Who has access** to **Anyone**.
+8. Copy the Web App URL into `GOOGLE_SHEETS_WEBAPP_URL`.
+9. Set a strong shared secret in `GOOGLE_SHEETS_WEBAPP_SECRET`.
+10. Run:
 
 ```bash
+npm run init:secret
+npm run setup:sheets
+```
+
+If `init:secret` says the secret is already initialized, use the same secret already stored in Apps Script Properties as `SMARTFLOW_SECRET`, or delete that property before initializing again.
+
+After every change to `google-apps-script/Code.gs`, paste the updated file into Apps Script and redeploy the Web App.
+
+For the clean physical therapy version, create a new Google Sheet, paste the latest `Code.gs`, deploy a new Web App, update `.env`, then run `npm run init:secret` and `npm run setup:sheets`. This avoids carrying old generic demo columns into the final CRM.
+
+## Run Locally
+
+Install dependencies:
+
+```bash
+npm install
 npm --prefix apps/dashboard install
+```
+
+Start the Telegram bot and legacy Express server:
+
+```bash
+npm run dev
+```
+
+Start the manager dashboard:
+
+```bash
 npm run dashboard:dev
 ```
 
@@ -290,103 +144,130 @@ Open:
 http://localhost:3001/login
 ```
 
-Use `ADMIN_PASSWORD` from `.env`. Optional dashboard env values:
+Use `ADMIN_PASSWORD` from `.env`.
+
+## Dashboard
+
+The dashboard is the primary admin interface for a non-technical center manager.
+
+Pages:
+
+- Overview: inquiry KPIs, urgent cases, branch demand, service mix, daily volume.
+- Intake Leads: search, filters, status badges, lead score, full lead details.
+- Conversations: chat-style history from the Messages sheet.
+- Follow-ups: pending/sent/failed/cancelled queue and status updates.
+- Reports: manager-friendly summary, recommendations, CSV/print/copy actions.
+- Center Profile: read-only MoveWell business config.
+- Demo: seed and clear safe fake therapy demo data.
+- System Health: env presence, setup checklist, and Setup Sheets action without exposing secrets.
+
+## Demo Mode
+
+Set:
 
 ```bash
-DASHBOARD_PORT=3001
-DASHBOARD_SECRET=replace-with-dashboard-secret
+DEMO_MODE=true
+BUSINESS_PRESET=physical-therapy
 ```
 
-The dashboard uses the same Apps Script Web App storage bridge. It does not read Google Sheets directly.
+Then open the dashboard and use **Demo -> Seed therapy demo data**. This creates realistic fake MoveWell leads, messages, follow-ups, and a report in Google Sheets through Apps Script only. Demo cleanup deletes only rows where `isDemo=true`.
 
-## Verification
+The demo includes realistic Arabic/Egyptian inquiries for:
+
+- Lower back pain in Nasr City
+- Neck pain from desk work
+- Post-ACL surgery rehabilitation
+- Football sports injury
+- Home physiotherapy for a parent
+- Pediatric physiotherapy consultation
+- Shoulder rehabilitation
+- Knee pain and nearest branch inquiry
+- Posture correction
+- Manual therapy price inquiry
+- Vague inquiry
+
+## Testing
+
+Run:
 
 ```bash
-npm run typecheck
 npm test
+npm run typecheck
 npm run build
-npm run format:check
 npm run dashboard:typecheck
 npm run dashboard:build
+npm run format:check
 ```
+
+Apps Script syntax check:
+
+```powershell
+Get-Content -Raw google-apps-script\Code.gs | node --check -
+```
+
+Read-only Apps Script deployment diagnostics:
+
+```bash
+npm run diagnose:apps-script
+```
+
+This checks the Web App health endpoint and the `diagnostics` action without creating, updating, or deleting sheet rows. It reports common setup problems such as old deployment code, invalid secret, missing setup, missing headers, timeout, or Apps Script runtime errors.
 
 ## Troubleshooting
 
-### Missing environment variable
+### Missing env variables
 
-Run through `docs/setup-checklist.md` and confirm every required key exists in `.env`. The app validates environment variables at startup and names missing variables without printing secret values.
-
-Required variables:
-
-- `TELEGRAM_BOT_TOKEN`
-- `OPENROUTER_API_KEY`
-- `OPENROUTER_MODEL`
-- `OPENROUTER_SITE_URL`
-- `OPENROUTER_APP_NAME`
-- `ADMIN_TELEGRAM_ID`
-- `GOOGLE_SHEETS_WEBAPP_URL`
-- `GOOGLE_SHEETS_WEBAPP_SECRET`
-- `ADMIN_PORT`
-- `ADMIN_PASSWORD`
-- `DASHBOARD_PORT`
-- `DASHBOARD_SECRET`
-- `BUSINESS_PRESET`
-- `DEMO_MODE`
-- `BOT_MODE`
+Check `docs/setup-checklist.md`. The app validates required env vars and names missing variables without printing secret values.
 
 ### Invalid Apps Script secret
 
-If you see an invalid secret error, confirm `GOOGLE_SHEETS_WEBAPP_SECRET` matches the Apps Script Script Property named `SMARTFLOW_SECRET`. If the property was initialized with the wrong value, delete `SMARTFLOW_SECRET` in Apps Script Project Settings and run `npm run init:secret` again.
+Confirm `GOOGLE_SHEETS_WEBAPP_SECRET` matches the Apps Script Script Property `SMARTFLOW_SECRET`. If it was initialized incorrectly, delete `SMARTFLOW_SECRET` in Apps Script Project Settings and run `npm run init:secret` again.
 
 ### Apps Script deployment errors
 
-Confirm the Web App is deployed with:
+Run `npm run diagnose:apps-script`. Confirm the Web App deployment uses **Execute as: Me** and **Who has access: Anyone**. Redeploy after every `Code.gs` update.
 
-- Execute as: `Me`
-- Who has access: `Anyone`
+### Dashboard says Apps Script failed
 
-After every Apps Script code change, create a new deployment or update the existing deployment, then copy the active Web App URL back into `.env`.
+Open **System Health** in the dashboard. If diagnostics says the deployment is outdated, paste the latest `google-apps-script/Code.gs` into Apps Script and redeploy. If it says setup is incomplete, run **Setup Sheets** from System Health or run `npm run setup:sheets`.
+
+### Dashboard login fails
+
+Use `ADMIN_PASSWORD` from `.env`. Set `DASHBOARD_SECRET` for cookie signing in the Next.js dashboard.
 
 ### Telegram polling conflicts
 
-If Telegram reports polling conflicts, another copy of the bot may already be running. Stop other local terminals, hosting processes, or previous dev sessions, then run `npm run dev` again.
+Stop other running copies of the bot, then restart `npm run dev`.
+
+### `EADDRINUSE` on startup
+
+This means another process is already using `ADMIN_PORT` (for example `3000` or `3002`).
+
+On Windows PowerShell:
+
+```powershell
+netstat -ano | findstr :3000
+taskkill /PID <PID_FROM_NETSTAT> /F
+```
+
+Then either restart `npm run dev` or set a different `ADMIN_PORT` value in `.env`.
 
 ### OpenRouter failures
 
-The bot logs OpenRouter failures with secrets redacted and uses fallback extraction, classification, and Arabic replies. Check that `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, and account credits are valid.
+Check `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, and account credits. The bot still uses safe fallback logic when AI calls fail.
 
-### Dashboard unauthorized
+### Demo data did not change
 
-Use one of these authentication methods:
+You must copy the updated `google-apps-script/Code.gs` into Apps Script and redeploy. Then use Dashboard -> Demo -> Clear demo data, then Seed therapy demo data.
 
-- `http://localhost:3000/dashboard?password=YOUR_ADMIN_PASSWORD`
-- `x-admin-password` header
-- HTTP Basic auth password
+## Documentation
 
-### Demo cleanup
-
-Use `/clear_demo` from the admin Telegram account. The Apps Script action deletes only rows where `isDemo` is true and does not delete real rows.
-
-### Wrong demo business
-
-Check `BUSINESS_PRESET` in `.env`. `/demo` uses the active preset. You can also force a seed with `/demo_physical`, `/demo_dental`, or `/demo_course`. If `google-apps-script/Code.gs` was changed, copy it into Apps Script, redeploy the Web App, and run `npm run setup:sheets`.
-
-## Additional Docs
-
-- `docs/setup-checklist.md`
 - `docs/apps-script-setup.md`
 - `docs/architecture.md`
 - `docs/dashboard.md`
+- `docs/setup-checklist.md`
 - `docs/client-demo-script.md`
-- `docs/case-study.md`
 - `docs/demo-conversations.md`
 - `docs/manual-qa-checklist.md`
-- `docs/dental-clinic-demo.md`
-- `docs/online-course-demo.md`
-
-## Notes
-
-- Customer-facing replies are Arabic.
-- Code, file names, comments, and documentation are English.
-- The app uses Telegram polling mode for the MVP.
-- OpenRouter credentials are never hardcoded.
+- `docs/case-study.md`
+- `docs/ui-quality-guidelines.md`

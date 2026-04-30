@@ -1,16 +1,29 @@
-import { Section } from "../../../components/ui";
+import { DashboardDataError, Section } from "../../../components/ui";
 import { getDashboardService } from "../../../lib/data";
+import { classifyDashboardError } from "@smartflow/dashboard/errors";
 
 export default async function BusinessSettingsPage() {
-  const settings = await getDashboardService().getBusinessSettings();
+  const loaded = await getDashboardService()
+    .getBusinessSettings()
+    .then((settings) => ({ ok: true as const, settings }))
+    .catch((error) => ({ ok: false as const, error }));
+
+  if (!loaded.ok) {
+    const error = classifyDashboardError(loaded.error);
+    return (
+      <DashboardDataError title={error.title} description={error.description} />
+    );
+  }
+
+  const settings = loaded.settings;
   const config = settings.config;
 
   return (
     <>
       <div>
-        <h1 className="text-2xl font-semibold text-ink">Business Settings</h1>
+        <h1 className="text-2xl font-semibold text-ink">Center profile</h1>
         <p className="mt-1 text-muted">
-          Read-only business configuration used by the AI reply generator.
+          Read-only MoveWell configuration used by the AI intake assistant.
         </p>
       </div>
 
@@ -20,7 +33,7 @@ export default async function BusinessSettingsPage() {
         </div>
       </Section>
 
-      <Section title="Business profile">
+      <Section title="Center profile">
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="businessName" value={config.businessName} />
           <Field label="businessType" value={config.businessType} />
@@ -30,6 +43,7 @@ export default async function BusinessSettingsPage() {
             label="unavailableDays"
             value={config.unavailableDays.join(", ") || "-"}
           />
+          <Field label="branches" value={config.branches.join(", ")} />
           <Field
             label="adminContact"
             value={JSON.stringify(config.adminContact, null, 2)}
@@ -69,9 +83,7 @@ export default async function BusinessSettingsPage() {
 
       <Section title="Settings sheet">
         {settings.settingsSheet.length === 0 ? (
-          <p className="text-sm text-muted">
-            No custom Settings sheet values found.
-          </p>
+          <p className="text-sm text-muted">No Settings sheet values found.</p>
         ) : (
           <pre className="overflow-x-auto rounded-md bg-slate-50 p-4 text-sm">
             {JSON.stringify(settings.settingsSheet, null, 2)}

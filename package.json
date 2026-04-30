@@ -11,6 +11,7 @@
     "dashboard:typecheck": "npm --prefix apps/dashboard run typecheck",
     "start": "node dist/src/index.js",
     "init:secret": "node ./node_modules/tsx/dist/cli.mjs src/scripts/initSecret.ts",
+    "diagnose:apps-script": "node ./node_modules/tsx/dist/cli.mjs src/scripts/diagnoseAppsScript.ts",
     "setup:sheets": "node ./node_modules/tsx/dist/cli.mjs src/scripts/setupSheets.ts",
     "build": "node ./node_modules/typescript/bin/tsc -p tsconfig.json",
     "typecheck": "node ./node_modules/typescript/bin/tsc -p tsconfig.json --noEmit",

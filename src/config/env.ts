@@ -35,7 +35,7 @@ const envSchema = z.object({
     .string()
     .min(1)
     .default("SmartFlow AI Telegram Sales Agent"),
-  OPENROUTER_TIMEOUT_MS: numberFromEnv.default(12000),
+  OPENROUTER_TIMEOUT_MS: numberFromEnv.default(20000),
   OPENROUTER_MAX_RETRIES: z
     .preprocess((value) => {
       if (typeof value === "string") {
@@ -44,16 +44,14 @@ const envSchema = z.object({
 
       return value;
     }, z.number().int().min(0))
-    .default(1),
+    .default(2),
   ADMIN_TELEGRAM_ID: z.string().min(1).optional(),
   GOOGLE_SHEETS_WEBAPP_URL: z.string().url(),
   GOOGLE_SHEETS_WEBAPP_SECRET: z.string().min(12),
   ADMIN_PORT: numberFromEnv.default(3000),
   ADMIN_PASSWORD: z.string().min(8),
-  DEMO_MODE: booleanFromEnv.default(false),
-  BUSINESS_PRESET: z
-    .enum(["custom", "dental-clinic", "online-course", "physical-therapy"])
-    .default("custom"),
+
+  BUSINESS_PRESET: z.literal("physical-therapy").default("physical-therapy"),
   BOT_MODE: z.enum(["polling", "webhook"]).default("polling"),
 });
 

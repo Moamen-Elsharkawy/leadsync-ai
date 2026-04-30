@@ -4,11 +4,12 @@ import type {
 } from "../config/businessConfig.js";
 import type {
   DashboardDataResult,
+  AppsScriptDiagnosticsResult,
   MessageFilters,
   SettingRecord,
   SheetsWebAppClient,
 } from "../sheets/sheetsWebAppClient.js";
-import type { LeadRecord } from "../types/lead.js";
+import type { LeadRecord, LeadStage, LeadStatus } from "../types/lead.js";
 import type { FollowUpRecord, MessageRecord } from "../types/message.js";
 import {
   buildOwnerReportText,
@@ -20,9 +21,9 @@ import {
   type LeadAnalytics,
   type LeadFilters,
 } from "./analytics.js";
+import { classifyDashboardError, type DashboardErrorInfo } from "./errors.js";
 
 export interface DashboardRuntimeConfig {
-  demoMode: boolean;
   businessPreset: BusinessPreset;
   botMode: string;
   envPresence: Record<string, boolean>;
@@ -44,12 +45,16 @@ export interface SystemHealthView {
   appsScriptWebAppConfigured: boolean;
   openRouterModelConfigured: boolean;
   telegramTokenConfigured: boolean;
-  demoMode: boolean;
+
   botMode: string;
   storageArchitecture: string;
   aiProvider: string;
   setupChecklist: string[];
 }
+
+export type AppsScriptDiagnosticsView =
+  | { ok: true; data: AppsScriptDiagnosticsResult }
+  | { ok: false; error: DashboardErrorInfo };
 
 export interface DashboardReportData {
   summary: DashboardSummary;
@@ -142,7 +147,7 @@ export class DashboardDataService {
       appsScriptWebAppConfigured: this.runtimeConfig.appsScriptConfigured,
       openRouterModelConfigured: this.runtimeConfig.openRouterModelConfigured,
       telegramTokenConfigured: this.runtimeConfig.telegramTokenConfigured,
-      demoMode: this.runtimeConfig.demoMode,
+
       botMode: this.runtimeConfig.botMode,
       storageArchitecture:
         "Google Sheets through the Google Apps Script Web App only",
@@ -157,20 +162,78 @@ export class DashboardDataService {
     };
   }
 
+  async getAppsScriptDiagnostics(): Promise<AppsScriptDiagnosticsView> {
+    try {
+      return { ok: true, data: await this.sheets.diagnostics() };
+    } catch (error) {
+      return { ok: false, error: classifyDashboardError(error) };
+    }
+  }
+
   getBusinessPreset(): BusinessPreset {
     return this.runtimeConfig.businessPreset;
   }
 
-  getDemoMode(): boolean {
-    return this.runtimeConfig.demoMode;
-  }
+
 
   getDashboardData(): Promise<DashboardDataResult> {
     return this.sheets.getDashboardData();
   }
 
+  setupSheets() {
+    return this.sheets.setupSheets();
+  }
+
+  async updateLeadAdminFields(
+    leadId: string,
+    patch: {
+      status?: LeadStatus;
+      stage?: LeadStage;
+      notesToAppend?: string;
+    },
+  ): Promise<LeadRecord> {
+    const lead = await this.sheets.getLead(leadId);
+
+    if (!lead) {
+      throw new Error(`Lead not found: ${leadId}`);
+    }
+
+    const notesToAppend = patch.notesToAppend?.trim();
+    const updated: LeadRecord = {
+      ...lead,
+      status: patch.status ?? lead.status,
+      stage: patch.stage ?? lead.stage,
+      notes: notesToAppend
+        ? [lead.notes, `Admin note: ${notesToAppend}`]
+            .filter(Boolean)
+            .join("\n")
+        : lead.notes,
+      updatedAt: new Date().toISOString(),
+    };
+
+    return this.sheets.upsertLead(updated);
+  }
+
+  async updateFollowUpStatus(
+    followUpId: string,
+    status: FollowUpRecord["status"],
+  ): Promise<FollowUpRecord> {
+    const followUps = await this.sheets.listFollowUps();
+    const followUp = followUps.find((item) => item.followUpId === followUpId);
+
+    if (!followUp) {
+      throw new Error(`Follow-up not found: ${followUpId}`);
+    }
+
+    return this.sheets.updateFollowUp({
+      ...followUp,
+      status,
+      sentAt: status === "sent" ? new Date().toISOString() : followUp.sentAt,
+    });
+  }
+
   seedDemoData() {
-    return this.sheets.seedDemoData(this.runtimeConfig.businessPreset);
+    return this.sheets.seedDemoData();
   }
 
   clearDemoData() {

@@ -7,41 +7,44 @@ export default async function LoginPage({
 }) {
   const params = await searchParams;
   return (
-    <main className="flex min-h-screen items-center justify-center bg-canvas px-4">
-      <div className="w-full max-w-md rounded-lg border border-line bg-panel p-8 shadow-sm">
-        <div className="mb-6">
-          <p className="text-sm font-medium text-brand">SmartFlow AI</p>
-          <h1 className="mt-2 text-2xl font-semibold text-ink">
-            Admin dashboard login
-          </h1>
-          <p className="mt-2 text-sm text-muted">
-            Enter the configured admin password. Secrets stay on the server.
-          </p>
+    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800 px-4">
+      <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl shadow-black/20">
+        <div className="bg-brand px-8 py-6 text-center">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-white/20 font-bold text-white shadow-inner backdrop-blur-sm">
+            MW
+          </div>
+          <h1 className="text-xl font-bold text-white">MoveWell Centers</h1>
+          <p className="mt-1 text-sm text-brand-100">Manager Dashboard Login</p>
         </div>
 
-        {params.error ? (
-          <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-hot">
-            Invalid password.
-          </div>
-        ) : null}
+        <div className="p-8">
+          {params.error ? (
+            <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              Invalid password. Please try again.
+            </div>
+          ) : null}
 
-        <form action={loginAction} className="space-y-4">
-          <label className="block">
-            <span className="text-sm font-medium text-ink">Password</span>
-            <input
-              name="password"
-              type="password"
-              required
-              className="mt-2 w-full rounded-md border border-line px-3 py-2 outline-none focus:border-brand"
-            />
-          </label>
-          <button
-            type="submit"
-            className="w-full rounded-md bg-brand px-4 py-2 font-medium text-white hover:bg-sky-800"
-          >
-            Sign in
-          </button>
-        </form>
+          <form action={loginAction} className="space-y-5">
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium text-slate-700">
+                Admin Password
+              </span>
+              <input
+                name="password"
+                type="password"
+                required
+                placeholder="Enter your dashboard password"
+                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm outline-none transition-all focus:border-brand focus:ring-2 focus:ring-brand/20"
+              />
+            </label>
+            <button
+              type="submit"
+              className="w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2"
+            >
+              Sign into Dashboard
+            </button>
+          </form>
+        </div>
       </div>
     </main>
   );

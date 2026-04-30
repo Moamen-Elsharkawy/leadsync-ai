@@ -1,13 +1,19 @@
 import { z } from "zod";
 import type { BusinessConfig } from "../config/businessConfig.js";
 import type { LeadFields, LeadIntent } from "../types/lead.js";
+import type { MessageRecord } from "../types/message.js";
 import type { OpenRouterClient } from "./openRouterClient.js";
 
 const extractedLeadSchema = z.object({
   fullName: z.string().nullable(),
   phone: z.string().nullable(),
   serviceRequested: z.string().nullable(),
-  budget: z.string().nullable(),
+  branch: z.string().nullable(),
+  conditionArea: z.string().nullable(),
+  urgency: z.string().nullable(),
+  preferredDate: z.string().nullable(),
+  preferredTime: z.string().nullable(),
+  contactPreference: z.string().nullable(),
   timeline: z.string().nullable(),
   location: z.string().nullable(),
   notes: z.string().nullable(),
@@ -19,6 +25,7 @@ export interface LeadExtractionOptions {
   messageText: string;
   existingFields?: LeadFields;
   businessConfig: BusinessConfig;
+  recentMessages?: MessageRecord[];
 }
 
 export interface LeadExtractionResult {
@@ -31,17 +38,22 @@ export async function extractLeadInfo(
   options: LeadExtractionOptions,
 ): Promise<LeadExtractionResult> {
   const prompts = buildExtractionPrompts(options);
+  const fallbackExtracted = constrainLeadFieldsToBusiness(
+    fallbackExtractLeadData(options.messageText),
+    options.businessConfig,
+  );
   const result = await options.client.generateJson(
     prompts.systemPrompt,
     prompts.userPrompt,
-    "LeadExtraction",
+    "PhysicalTherapyLeadExtraction",
   );
 
   if (result.ok) {
-    const extracted = constrainLeadFieldsToBusiness(
+    const aiExtracted = constrainLeadFieldsToBusiness(
       parseLeadExtractionData(result.data),
       options.businessConfig,
     );
+    const extracted = mergeLeadFields(fallbackExtracted, aiExtracted);
     if (Object.keys(extracted).length > 0) {
       return {
         extracted,
@@ -51,10 +63,7 @@ export async function extractLeadInfo(
     }
   }
 
-  const extracted = constrainLeadFieldsToBusiness(
-    fallbackExtractLeadData(options.messageText),
-    options.businessConfig,
-  );
+  const extracted = fallbackExtracted;
   return {
     extracted,
     merged: mergeLeadFields(options.existingFields ?? {}, extracted),
@@ -77,9 +86,14 @@ export function parseLeadExtractionData(data: unknown): LeadFields {
     fullName: parsed.data.fullName ?? undefined,
     phone: parsed.data.phone ?? undefined,
     serviceRequested: parsed.data.serviceRequested ?? undefined,
-    budget: parsed.data.budget ?? undefined,
-    timeline: parsed.data.timeline ?? undefined,
-    location: parsed.data.location ?? undefined,
+    branch: parsed.data.branch ?? undefined,
+    conditionArea: parsed.data.conditionArea ?? undefined,
+    urgency: parsed.data.urgency ?? undefined,
+    preferredDate: parsed.data.preferredDate ?? undefined,
+    preferredTime: parsed.data.preferredTime ?? undefined,
+    contactPreference: parsed.data.contactPreference ?? undefined,
+    timeline: parsed.data.timeline ?? parsed.data.preferredDate ?? undefined,
+    location: parsed.data.location ?? parsed.data.branch ?? undefined,
     notes: parsed.data.notes ?? undefined,
     intent: parsed.data.intent,
   });
@@ -93,14 +107,14 @@ export function mergeLeadFields(
   const cleanExtracted = cleanLeadFields(extractedFields);
 
   for (const [key, value] of Object.entries(cleanExtracted) as Array<
-    [keyof LeadFields, string]
+    [keyof LeadFields, LeadFields[keyof LeadFields]]
   >) {
     if (!value) {
       continue;
     }
 
-    if (key === "notes" && merged.notes && merged.notes !== value) {
-      merged.notes = `${merged.notes}\n${value}`;
+    if (key === "notes") {
+      merged.notes = String(value);
       continue;
     }
 
@@ -111,42 +125,63 @@ export function mergeLeadFields(
       continue;
     }
 
-    merged[key] = value;
+    if (typeof value === "string") {
+      merged[key] = value;
+    }
   }
 
   return merged;
 }
 
 export function fallbackExtractLeadData(messageText: string): LeadFields {
-  const phone = firstMatch(messageText, /(?:\+?\d[\d\s().-]{7,}\d)/u)?.replace(
-    /[^\d+]/g,
-    "",
-  );
-  const budget = firstMatch(
+  const normalizedText = normalizeArabicText(messageText);
+  const branch = extractBranch(normalizedText);
+  const conditionArea = extractConditionArea(normalizedText);
+  const serviceRequested = extractService(normalizedText);
+  const preferredDate = extractPreferredDate(normalizedText);
+  const preferredTime = extractPreferredTime(normalizedText);
+  const phone = extractPhone(normalizedText);
+  const fullName = extractFullName(normalizedText);
+  const urgency = extractUrgency(normalizedText, preferredDate);
+  const contactPreference = extractContactPreference(normalizedText, phone);
+  const intent = extractIntent(normalizedText);
+
+  // Only set notes if there's meaningful extracted information,
+  // not the raw message text itself.
+  const meaningfulNotes = buildMeaningfulNotes(
     messageText,
-    /(?:\$|usd|egp|جنيه|دولار)?\s?\d[\d,. ]{2,}\s?(?:\$|usd|egp|جنيه|دولار|k|الف|ألف|آلاف)?/iu,
+    serviceRequested,
+    conditionArea,
   );
-  const fullName =
-    firstMatch(
-      messageText,
-      /(?:اسمي|انا|أنا|my name is|i am)\s+([^\n،,.]+)/iu,
-      1,
-    ) ?? undefined;
-  const timeline = extractTimeline(messageText);
-  const location = extractLocation(messageText);
-  const serviceRequested = extractService(messageText);
-  const intent = extractIntent(messageText);
 
   return cleanLeadFields({
     fullName,
     phone,
     serviceRequested,
-    budget,
-    timeline,
-    location,
-    notes: messageText,
+    branch,
+    conditionArea,
+    urgency,
+    preferredDate,
+    preferredTime,
+    contactPreference,
+    timeline: preferredDate,
+    location: branch ?? extractLocation(normalizedText),
+    notes: meaningfulNotes,
     intent,
   });
+}
+
+function buildMeaningfulNotes(
+  messageText: string,
+  serviceRequested?: string,
+  conditionArea?: string,
+): string | undefined {
+  // Only create notes for messages that contain useful extra context
+  // beyond what's already captured in structured fields
+  if (messageText.length > 100 && (serviceRequested || conditionArea)) {
+    return `Customer message: ${messageText.slice(0, 200)}`;
+  }
+  return undefined;
 }
 
 function buildExtractionPrompts(options: LeadExtractionOptions): {
@@ -155,48 +190,64 @@ function buildExtractionPrompts(options: LeadExtractionOptions): {
 } {
   return {
     systemPrompt: [
-      "You extract CRM lead qualification data for a small-business Arabic sales assistant.",
-      "Return only valid JSON with exactly these keys: fullName, phone, serviceRequested, budget, timeline, location, notes, intent.",
+      "You extract intake and lead qualification data for a physical therapy center called MoveWell.",
+      "Return only valid JSON with exactly these keys: fullName, phone, serviceRequested, branch, conditionArea, urgency, preferredDate, preferredTime, contactPreference, timeline, location, notes, intent.",
       'Each field except intent must be a string or null. intent must be one of: "buying", "asking", "support", "irrelevant", "unknown".',
-      "Extract only what the customer actually said. Never invent prices, guarantees, discounts, deadlines, availability, names, phone numbers, or booking confirmations.",
-      "serviceRequested must match one item from the configured services list when possible. If the requested service is not in the configured list, set serviceRequested to null and mention it in notes.",
-      "For medical or therapy businesses, do not diagnose, give treatment advice, recommend exercises, promise outcomes, or estimate session counts.",
-      "If a field is implied but not explicit, keep it null and mention the uncertainty in notes.",
-    ].join(" "),
+      "",
+      "CRITICAL RULES:",
+      "- Extract ONLY what the customer actually said. Never invent data.",
+      "- Use the existingFields and recentMessages to build cumulative context. If a field was provided in a previous message, keep it.",
+      "- For fullName: extract Arabic or English names. Look for patterns like 'اسمي [name]', 'أنا [name]', or just a name provided in response to a name question.",
+      "- For phone: extract Egyptian mobile (01x-xxxx-xxxx) or landline (02-xxxx-xxxx) numbers.",
+      "- serviceRequested must match one configured service when possible.",
+      "- branch should match one configured branch when possible.",
+      "- If the customer says general 'علاج طبيعي' or 'فيزيو' without specifying body part, set serviceRequested to null and note they need general physiotherapy.",
+      "- Do not diagnose or provide medical advice.",
+    ].join("\n"),
     userPrompt: JSON.stringify({
       businessName: options.businessConfig.businessName,
-      businessType: options.businessConfig.businessType,
+      branches: options.businessConfig.branches,
       services: options.businessConfig.services,
       existingFields: options.existingFields ?? {},
+      recentMessages: serializeRecentMessages(options.recentMessages),
       messageText: options.messageText,
       examples: [
         {
           input:
-            "محتاج جلسة علاج طبيعي للظهر في فرع مدينة نصر بكرة. رقمي 01012345678.",
+            "محتاج جلسة علاج طبيعي لأسفل الظهر في فرع مدينة نصر بكرة. رقمي 01044440001.",
           output: {
             fullName: null,
-            phone: "01012345678",
+            phone: "01044440001",
             serviceRequested: "Back pain physiotherapy",
-            budget: null,
-            timeline: "بكرة",
-            location: "مدينة نصر",
+            branch: "Nasr City Branch",
+            conditionArea: "lower back",
+            urgency: "soon",
+            preferredDate: "tomorrow",
+            preferredTime: null,
+            contactPreference: "phone call",
+            timeline: "tomorrow",
+            location: "Nasr City Branch",
             notes:
-              "Customer wants back pain physiotherapy and shared branch, timing, and phone.",
+              "Customer wants lower back physiotherapy in Nasr City tomorrow.",
             intent: "buying",
           },
         },
         {
-          input: "كام سعر الأتمتة؟",
+          input: "أنا أحمد ومحتاج جلسة للركبة",
           output: {
-            fullName: null,
+            fullName: "أحمد",
             phone: null,
-            serviceRequested: "automation",
-            budget: null,
+            serviceRequested: "Knee pain treatment",
+            branch: null,
+            conditionArea: "knee",
+            urgency: null,
+            preferredDate: null,
+            preferredTime: null,
+            contactPreference: null,
             timeline: null,
             location: null,
-            notes:
-              "Customer is asking about price without sharing budget or timing.",
-            intent: "asking",
+            notes: null,
+            intent: "buying",
           },
         },
       ],
@@ -204,42 +255,64 @@ function buildExtractionPrompts(options: LeadExtractionOptions): {
   };
 }
 
+function serializeRecentMessages(
+  recentMessages: MessageRecord[] | undefined,
+): Array<{ direction: string; text: string }> {
+  return (recentMessages ?? []).slice(-10).map((message) => ({
+    direction: message.direction,
+    text: String(message.text ?? "").slice(0, 500),
+  }));
+}
+
 function constrainLeadFieldsToBusiness(
   fields: LeadFields,
   businessConfig: BusinessConfig,
 ): LeadFields {
-  if (!fields.serviceRequested || businessConfig.services.length === 0) {
-    return fields;
-  }
+  const constrained: LeadFields = { ...fields };
 
-  const normalizedRequested = normalize(fields.serviceRequested);
-  const matchingService = businessConfig.services.find((service) => {
-    const normalizedService = normalize(service);
-    return (
-      normalizedRequested === normalizedService ||
-      normalizedRequested.includes(normalizedService) ||
-      normalizedService.includes(normalizedRequested)
+  if (constrained.serviceRequested && businessConfig.services.length > 0) {
+    const matchingService = findConfiguredValue(
+      constrained.serviceRequested,
+      businessConfig.services,
     );
-  });
 
-  if (matchingService) {
-    return { ...fields, serviceRequested: matchingService };
+    if (matchingService) {
+      constrained.serviceRequested = matchingService;
+    } else {
+      constrained.notes = [
+        constrained.notes,
+        `Unsupported requested service: ${constrained.serviceRequested}`,
+      ]
+        .filter(Boolean)
+        .join("\n");
+      constrained.serviceRequested = undefined;
+    }
   }
 
-  return {
-    ...fields,
-    serviceRequested: undefined,
-    notes: [
-      fields.notes,
-      `Unsupported requested service: ${fields.serviceRequested}`,
-    ]
-      .filter(Boolean)
-      .join("\n"),
-  };
+  if (constrained.branch && (businessConfig.branches?.length ?? 0) > 0) {
+    constrained.branch =
+      findConfiguredValue(constrained.branch, businessConfig.branches) ??
+      normalizeBranchAlias(constrained.branch) ??
+      constrained.branch;
+    constrained.location = constrained.branch;
+  }
+
+  return constrained;
 }
 
-function normalize(value: string): string {
-  return value.toLowerCase().replace(/\s+/g, " ").trim();
+function findConfiguredValue(
+  requested: string,
+  configuredValues: string[],
+): string | undefined {
+  const normalizedRequested = normalize(requested);
+  return configuredValues.find((value) => {
+    const normalizedValue = normalize(value);
+    return (
+      normalizedRequested === normalizedValue ||
+      normalizedRequested.includes(normalizedValue) ||
+      normalizedValue.includes(normalizedRequested)
+    );
+  });
 }
 
 function cleanLeadFields(fields: LeadFields): LeadFields {
@@ -268,6 +341,252 @@ function cleanLeadFields(fields: LeadFields): LeadFields {
   return clean;
 }
 
+function extractPhone(messageText: string): string | undefined {
+  // Match Egyptian mobile (01x) and landline (02) numbers
+  const phone = firstMatch(
+    messageText,
+    /(?:\+?2?0[12]\d{8,9}|\+?\d[\d\s().-]{7,}\d)/u,
+  )?.replace(/[^\d+]/g, "");
+  return phone?.replace(/^(\+?20)/, "0");
+}
+
+function extractFullName(messageText: string): string | undefined {
+  // Pattern 1: Explicit name introduction
+  const explicitName = firstMatch(
+    messageText,
+    /(?:اسمي|انا|أنا|my name is|i am|اسم حضرتك|أنا اسمي)\s+([^\n،,.?؟]{2,40})/iu,
+    1,
+  );
+
+  if (explicitName) {
+    return normalizeExtractedName(explicitName);
+  }
+
+  // Pattern 2: Standalone Arabic name (2-4 words of Arabic letters only)
+  // Only match if the entire message looks like just a name
+  const trimmed = messageText.trim();
+  if (
+    trimmed.length >= 3 &&
+    trimmed.length <= 50 &&
+    /^[\u0600-\u06FF\s]+$/.test(trimmed) &&
+    !/(?:مرحبا|السلام|سلام|أهلا|شكرا|تمام|اه|لا|أيوه|ماشي|حاضر|طيب)/.test(
+      trimmed,
+    ) &&
+    trimmed.split(/\s+/).length <= 4
+  ) {
+    return trimmed;
+  }
+
+  return undefined;
+}
+
+function normalizeExtractedName(value: string): string | undefined {
+  const [firstPart = ""] = value.split(
+    /\s+(?:و?محتاج|و?محتاجة|و?عايز|و?عاوز|و?حابب|and|need|want)/iu,
+  );
+  const cleaned = firstPart.trim();
+
+  return cleaned.length >= 2 ? cleaned : undefined;
+}
+
+function extractBranch(messageText: string): string | undefined {
+  if (/(?:مدينة نصر|مدينه نصر|nasr city)/iu.test(messageText)) {
+    return "Nasr City Branch";
+  }
+
+  if (/(?:المعادي|معادي|maadi)/iu.test(messageText)) {
+    return "Maadi Branch";
+  }
+
+  if (
+    /(?:التجمع|القاهرة الجديدة|القاهره الجديده|new cairo|tagamoa|tagamo3)/iu.test(
+      messageText,
+    )
+  ) {
+    return "New Cairo Branch";
+  }
+
+  if (/(?:اقرب فرع|أقرب فرع|nearest branch)/iu.test(messageText)) {
+    return "nearest branch";
+  }
+
+  return undefined;
+}
+
+function normalizeBranchAlias(value: string): string | undefined {
+  return extractBranch(value);
+}
+
+function extractConditionArea(messageText: string): string | undefined {
+  const patterns: Array<[RegExp, string]> = [
+    [/(?:أسفل الظهر|اسفل الظهر|الظهر|ضهر|ظهر|lower back|back)/iu, "back"],
+    [/(?:الرقبة|رقبة|رقبه|neck)/iu, "neck"],
+    [/(?:ركبة|الركبة|ركبه|الركبه|knee)/iu, "knee"],
+    [/(?:كتف|الكتف|shoulder)/iu, "shoulder"],
+    [
+      /(?:رباط صليبي|acl|بعد عملية|بعد العمليه|جراحة|جراحه|surgery|post surgery|post-surgery)/iu,
+      "post-surgery",
+    ],
+    [
+      /(?:إصابة ملاعب|اصابة ملاعب|رياض|كورة|كرة|football|sports injury)/iu,
+      "sports injury",
+    ],
+    [/(?:أطفال|اطفال|طفل|pediatric|kids)/iu, "pediatric"],
+    [/(?:قوام|انحناء|وضعية|وضعيه|posture)/iu, "posture"],
+    [/(?:مانيول|يدوي|manual therapy)/iu, "manual therapy"],
+  ];
+
+  return patterns.find(([pattern]) => pattern.test(messageText))?.[1];
+}
+
+function extractService(messageText: string): string | undefined {
+  const services: Array<[RegExp, string]> = [
+    [
+      /(?:أسفل الظهر|اسفل الظهر|الظهر|ضهر|ظهر|lower back|back pain)/iu,
+      "Back pain physiotherapy",
+    ],
+    [/(?:الرقبة|رقبة|رقبه|neck pain|neck)/iu, "Neck pain physiotherapy"],
+    [
+      /(?:إصابة ملاعب|اصابة ملاعب|رياض|كورة|كرة|football|sports injury)/iu,
+      "Sports injury rehabilitation",
+    ],
+    [
+      /(?:رباط صليبي|acl|بعد عملية|بعد العمليه|جراحة|جراحه|surgery|post surgery|post-surgery)/iu,
+      "Post-surgery rehabilitation",
+    ],
+    [/(?:ركبة|الركبة|ركبه|الركبه|knee)/iu, "Knee pain treatment"],
+    [/(?:كتف|الكتف|shoulder)/iu, "Shoulder rehabilitation"],
+    [
+      /(?:جلسة منزلية|جلسه منزليه|زيارة منزلية|زياره منزليه|في البيت|home physiotherapy|home session)/iu,
+      "Home physiotherapy session",
+    ],
+    [
+      /(?:أطفال|اطفال|طفل|pediatric|kids)/iu,
+      "Pediatric physiotherapy consultation",
+    ],
+    [/(?:قوام|انحناء|وضعية|وضعيه|posture)/iu, "Posture correction"],
+    [/(?:مانيول|يدوي|manual therapy)/iu, "Manual therapy inquiry"],
+    // General physiotherapy without specific body part — do NOT default to back
+    // Return undefined so the bot asks which service
+  ];
+
+  return services.find(([pattern]) => pattern.test(messageText))?.[1];
+}
+
+function extractPreferredDate(messageText: string): string | undefined {
+  const patterns = [
+    [/(?:النهارده|النهاردة|اليوم|today)/iu, "today"],
+    [/(?:بكرة|بكره|غدا|غدًا|tomorrow)/iu, "tomorrow"],
+    [/(?:عاجل|حالا|حالًا|مستعجل|urgent|asap)/iu, "urgent"],
+    [
+      /(?:الأسبوع ده|الاسبوع ده|هذا الأسبوع|هذا الاسبوع|this week)/iu,
+      "this week",
+    ],
+    [/(?:الأسبوع الجاي|الاسبوع الجاي|next week)/iu, "next week"],
+    [/(?:الشهر ده|هذا الشهر|this month)/iu, "this month"],
+  ] as const;
+
+  return patterns.find(([pattern]) => pattern.test(messageText))?.[1];
+}
+
+function extractPreferredTime(messageText: string): string | undefined {
+  const patterns = [
+    [/(?:الصبح|صباح|morning)/iu, "morning"],
+    [/(?:بعد الظهر|بعد الضهر|afternoon)/iu, "afternoon"],
+    [/(?:بالليل|المساء|مساء|evening|night)/iu, "evening"],
+    [/(?:بعد\s*\d{1,2}|at\s*\d{1,2})/iu, undefined],
+  ] as const;
+
+  const direct = patterns.find(([pattern]) => pattern.test(messageText));
+  if (direct?.[1]) {
+    return direct[1];
+  }
+
+  return firstMatch(
+    messageText,
+    /(?:الساعة|الساعه|at)\s*([0-9]{1,2}(?::[0-9]{2})?\s?(?:am|pm)?)/iu,
+    1,
+  );
+}
+
+function extractUrgency(
+  messageText: string,
+  preferredDate: string | undefined,
+): string | undefined {
+  if (
+    preferredDate === "today" ||
+    preferredDate === "tomorrow" ||
+    preferredDate === "urgent" ||
+    /(?:عاجل|حالا|حالًا|مستعجل|urgent|asap|book|احجز|حجز|موعد)/iu.test(
+      messageText,
+    )
+  ) {
+    return "urgent";
+  }
+
+  if (preferredDate === "this week" || /(?:قريب|soon)/iu.test(messageText)) {
+    return "soon";
+  }
+
+  return preferredDate ? "routine" : undefined;
+}
+
+function extractContactPreference(
+  messageText: string,
+  phone?: string,
+): string | undefined {
+  if (
+    phone ||
+    /(?:كلموني|اتصال|مكالمة|مكالمه|call|phone)/iu.test(messageText)
+  ) {
+    return "phone call";
+  }
+
+  if (/(?:تليجرام|تلجرام|telegram)/iu.test(messageText)) {
+    return "Telegram";
+  }
+
+  return undefined;
+}
+
+function extractLocation(messageText: string): string | undefined {
+  return firstMatch(
+    messageText,
+    /(?:في|من|location|city)\s+([^\n،,.]{2,40})/iu,
+    1,
+  );
+}
+
+function extractIntent(messageText: string): LeadIntent {
+  if (
+    /(?:spam|scam|free money|crypto giveaway|اعلان عشوائي)/iu.test(messageText)
+  ) {
+    return "irrelevant";
+  }
+
+  if (/(?:support|bug|refund|دعم|مشكلة تقنية|استرجاع)/iu.test(messageText)) {
+    return "support";
+  }
+
+  if (
+    /(?:احجز|حجز|موعد|كلموني|اتصال|مكالمة|مكالمه|السعر|سعر|تكلفة|تكلفه|price|cost|book|call|urgent|asap|need|want|عايز|عاوز|محتاج|محتاجة)/iu.test(
+      messageText,
+    )
+  ) {
+    return /(?:احجز|حجز|موعد|كلموني|اتصال|مكالمة|مكالمه|urgent|asap|book|call|مستعجل|عاجل|بكرة|بكره|النهارده|النهاردة)/iu.test(
+      messageText,
+    )
+      ? "buying"
+      : "asking";
+  }
+
+  if (messageText.trim().length < 12) {
+    return "asking";
+  }
+
+  return "unknown";
+}
+
 function isLeadIntent(value: unknown): value is LeadIntent {
   return (
     value === "buying" ||
@@ -276,6 +595,19 @@ function isLeadIntent(value: unknown): value is LeadIntent {
     value === "irrelevant" ||
     value === "unknown"
   );
+}
+
+function normalize(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function normalizeArabicText(value: string): string {
+  return value
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/ى/g, "ي")
+    .replace(/[^\S\r\n]+/g, " ")
+    .trim();
 }
 
 function extractJsonObject(content: string): unknown {
@@ -305,127 +637,4 @@ function firstMatch(
   const match = regex.exec(value);
   const matched = match?.[groupIndex];
   return matched?.trim();
-}
-
-function extractTimeline(messageText: string): string | undefined {
-  const patterns = [
-    /(?:اليوم|النهارده|حالا|حالاً|عاجل|بكرة|urgent|asap|today|tomorrow)/iu,
-    /(?:هذا الاسبوع|هذا الأسبوع|الأسبوع ده|اسبوع|أسبوع|week)/iu,
-    /(?:شهر|month|30 days|٣٠ يوم|30 يوم)/iu,
-    /(?:next month|الشهر القادم|الشهر الجاي)/iu,
-  ];
-
-  for (const pattern of patterns) {
-    const match = firstMatch(messageText, pattern);
-    if (match) {
-      return match;
-    }
-  }
-
-  return firstMatch(messageText, /(?:خلال|في خلال|within)\s+([^\n،,.]+)/iu, 1);
-}
-
-function extractLocation(messageText: string): string | undefined {
-  return (
-    firstMatch(
-      messageText,
-      /(?:في|من|location|city)\s+([^\n،,.]{2,40})/iu,
-      1,
-    ) ??
-    firstMatch(
-      messageText,
-      /(?:مدينة نصر|المعادي|التجمع|القاهرة|الجيزة|الإسكندرية|alexandria|cairo|giza|nasr city|maadi|new cairo)/iu,
-    )
-  );
-}
-
-function extractService(messageText: string): string | undefined {
-  const services: Array<[RegExp, string]> = [
-    [
-      /(?:أسفل الظهر|الظهر|ضهر|ظهر|back pain|lower back)/iu,
-      "Back pain physiotherapy",
-    ],
-    [/(?:الرقبة|رقبة|neck pain|neck)/iu, "Neck pain physiotherapy"],
-    [
-      /(?:إصابة ملاعب|اصابة ملاعب|رياض|كورة|كرة|football|sports injury)/iu,
-      "Sports injury rehabilitation",
-    ],
-    [
-      /(?:رباط صليبي|acl|بعد عملية|بعد العملية|جراحة|surgery|post-surgery|post surgery)/iu,
-      "Post-surgery rehabilitation",
-    ],
-    [/(?:ركبة|knee)/iu, "Knee pain treatment"],
-    [/(?:كتف|shoulder)/iu, "Shoulder rehabilitation"],
-    [
-      /(?:جلسة منزلية|زيارة منزلية|في البيت|home physiotherapy|home session)/iu,
-      "Home physiotherapy session",
-    ],
-    [/(?:أطفال|طفل|pediatric|kids)/iu, "Pediatric physiotherapy consultation"],
-    [/(?:قوام|posture|انحناء|وضعية)/iu, "Posture correction"],
-    [/(?:مانيوال|يدوي|manual therapy)/iu, "Manual therapy inquiry"],
-    [/(?:علاج طبيعي|فيزيو|physio|physiotherapy)/iu, "Back pain physiotherapy"],
-    [/(?:زراعة|زرع|implant|implants)/iu, "زراعة الأسنان"],
-    [/(?:تبييض|whitening)/iu, "تبييض الأسنان"],
-    [/(?:تنظيف|تلميع|cleaning|polishing)/iu, "تنظيف وتلميع الأسنان"],
-    [/(?:تقويم|orthodontic|braces)/iu, "تقويم الأسنان"],
-    [/(?:كشف|استشارة أسنان|dental consultation)/iu, "كشف واستشارة أسنان"],
-    [/(?:كورس|دورة|course|enroll|اشتراك)/iu, "الاشتراك في كورس فردي"],
-    [/(?:تدريب خاص|جلسات تدريب|coaching|private)/iu, "جلسات تدريب خاصة"],
-    [
-      /(?:تدريب شركة|تدريب فرق|corporate training|team training)/iu,
-      "تدريب فرق الشركات",
-    ],
-    [/(?:باقة|bundle)/iu, "باقة كورسات"],
-    [
-      /(?:مسار|استشارة اختيار|learning consultation)/iu,
-      "استشارة اختيار مسار التعلم",
-    ],
-    [/(?:telegram|تيليجرام|تلجرام|بوت)/iu, "Telegram bot"],
-    [/(?:طوارئ|ألم ضرس|emergency)/iu, "استفسار طوارئ الأسنان"],
-    [/(?:automation|اوتوميشن|أتمتة|اتمتة)/iu, "AI automation"],
-    [/(?:crm|عملاء|مبيعات)/iu, "CRM setup"],
-    [/(?:website|web site|موقع|landing page)/iu, "Website"],
-    [/(?:ads|marketing|اعلانات|إعلانات|تسويق)/iu, "Marketing automation"],
-    [/(?:chatbot|شات بوت|ذكاء اصطناعي|ai)/iu, "AI chatbot"],
-  ];
-
-  for (const [pattern, service] of services) {
-    if (pattern.test(messageText)) {
-      return service;
-    }
-  }
-
-  return firstMatch(
-    messageText,
-    /(?:احتاج|أحتاج|عايز|عاوز|محتاج|need|want)\s+([^\n،,.]{3,80})/iu,
-    1,
-  );
-}
-
-function extractIntent(messageText: string): LeadIntent {
-  if (/(?:spam|scam|free money|crypto giveaway)/iu.test(messageText)) {
-    return "irrelevant";
-  }
-
-  if (
-    /(?:support|help|bug|problem|issue|refund|دعم|مشكلة|استرجاع)/iu.test(
-      messageText,
-    )
-  ) {
-    return "support";
-  }
-
-  if (
-    /(?:buy|start|book|call|quote|price|cost|demo|need|want|urgent|asap|اشتري|ابدأ|احجز|سعر|تكلفة|عرض سعر|محتاج|عايز|موعد|زيارة)/iu.test(
-      messageText,
-    )
-  ) {
-    return /(?:book|call|quote|start|urgent|asap|buy|احجز|اتصال|مكالمة|عرض سعر|ابدأ|عاجل|بكرة|النهارده)/iu.test(
-      messageText,
-    )
-      ? "buying"
-      : "asking";
-  }
-
-  return "unknown";
 }

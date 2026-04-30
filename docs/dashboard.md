@@ -1,25 +1,20 @@
-# Web Admin Dashboard
+# Manager Dashboard
 
-SmartFlow includes a dedicated Next.js dashboard under `apps/dashboard`. It is separate from the Telegram bot runtime, so the existing bot and legacy Express admin routes keep working.
+The dashboard is the primary admin interface. It is built for a non-technical physical therapy center manager.
 
-## Architecture
+## Pages
 
-- Next.js + TypeScript + Tailwind CSS
-- Recharts for analytics charts
-- Server-side password gate using `ADMIN_PASSWORD`
-- HTTP-only cookie session
-- Reads CRM data only through the Apps Script Web App contract
-- No database, Google Cloud SDK, service account, or credentials JSON
+- **Overview**: total inquiries, urgent leads, follow-up leads, daily inquiry volume, branch demand, service mix, and follow-up status.
+- **Intake Leads**: searchable and filterable lead table with status badges and lead scores.
+- **Lead Details**: full intake profile, manager next action, human review reminder, and controls for status, stage, and notes.
+- **Conversations**: Telegram message history in chat-style bubbles.
+- **Follow-ups**: queue visibility and status update controls.
+- **Reports**: manager-friendly report text, top services, recommendations, copy, CSV, and print actions.
+- **Center Profile**: read-only MoveWell business config.
+- **Demo**: seed and clear fake MoveWell demo data.
+- **System Health**: env presence and setup actions without exposing secret values.
 
-## Run Locally
-
-Install dashboard dependencies once:
-
-```bash
-npm --prefix apps/dashboard install
-```
-
-Start the dashboard:
+## Run
 
 ```bash
 npm run dashboard:dev
@@ -31,51 +26,21 @@ Open:
 http://localhost:3001/login
 ```
 
-Use the same `ADMIN_PASSWORD` configured in `.env`.
+Use `ADMIN_PASSWORD` from `.env`.
 
-## Pages
+## Data Source
 
-- Overview: KPI cards, charts, latest leads
-- Leads: searchable and filterable lead table
-- Lead Details: full lead record and recommended next action
-- Conversations: chat-style Messages sheet viewer
-- Follow-ups: FollowUps sheet queue and status summary
-- Reports: owner-friendly report, copy, print, CSV export
-- Business Settings: read-only business config and Settings sheet values
-- Demo: seed and clear demo data through Apps Script
-- System Health: env presence and architecture checklist without secret values
+The dashboard uses `src/sheets/sheetsWebAppClient.ts`. It does not read Google Sheets directly and does not use a database.
 
-## Demo Presets
+## Manager Actions
 
-The dashboard reads the active `BUSINESS_PRESET` and shows the matching business settings. Supported presets:
+- Setup Sheets from System Health.
+- Seed therapy demo data.
+- Clear demo data only.
+- Update lead status, stage, and notes.
+- Update follow-up status.
+- Review conversations and reports.
 
-- `physical-therapy` for MoveWell Physical Therapy Centers
-- `dental-clinic` for Pearl Smile Dental Center
-- `online-course` for SkillBridge Academy
-- `custom` for `config/business.json`
+## UX Rules
 
-Use the Demo page or Telegram commands to seed safe fake data. Physical therapy demo data is medically cautious: it collects intake details and routes leads to staff without diagnosis, treatment advice, recovery promises, or appointment confirmation.
-
-## Apps Script Actions
-
-The dashboard uses existing actions plus:
-
-- `listMessages`
-- `listMessagesByLead`
-- `listMessagesByTelegramUser`
-- `listSettings`
-- `upsertSetting`
-- `getDashboardData`
-
-After copying a changed `google-apps-script/Code.gs` into Apps Script, redeploy the Web App and run:
-
-```bash
-npm run setup:sheets
-```
-
-## Security Notes
-
-- Do not expose `.env` to the browser.
-- `ADMIN_PASSWORD` is checked server-side only.
-- The dashboard shows whether env variables are present, not their values.
-- Demo cleanup deletes only rows where `isDemo=true`.
+Keep the dashboard focused on manager decisions: urgent inquiries, branch demand, follow-up queue, service demand, and staff review. Avoid technical implementation details unless they are needed for setup or troubleshooting.

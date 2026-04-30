@@ -9,28 +9,10 @@ import {
 } from "../src/ai/leadExtractor.js";
 
 const businessConfig: BusinessConfig = {
-  businessName: "Test Business",
-  businessType: "automation studio",
-  language: "ar",
-  services: ["Telegram bot", "Website"],
-  workingHours: { timezone: "Africa/Cairo", weekly: {} },
-  tone: "professional",
-  defaultCurrency: "EGP",
-  unavailableDays: [],
-  adminContact: {},
-  qualificationQuestions: {
-    serviceRequested: "ما الخدمة التي تحتاجها بالتحديد؟",
-    budgetOrTimeline: "ما الميزانية المتوقعة أو الموعد المطلوب لتنفيذ الخدمة؟",
-    phone: "هل يمكنك إرسال رقم هاتف للتواصل معك؟",
-  },
-  fallbackReply: "شكرا لتواصلك معنا.",
-  forbiddenClaims: [],
-};
-
-const physicalTherapyConfig: BusinessConfig = {
-  ...businessConfig,
   businessName: "MoveWell Physical Therapy Centers",
   businessType: "physical therapy center",
+  language: "ar",
+  branches: ["Nasr City Branch", "Maadi Branch", "New Cairo Branch"],
   services: [
     "Back pain physiotherapy",
     "Neck pain physiotherapy",
@@ -43,6 +25,19 @@ const physicalTherapyConfig: BusinessConfig = {
     "Posture correction",
     "Manual therapy inquiry",
   ],
+  workingHours: { timezone: "Africa/Cairo", weekly: {} },
+  tone: "professional",
+  defaultCurrency: "EGP",
+  unavailableDays: [],
+  adminContact: {},
+  qualificationQuestions: {
+    serviceRequested: "ما نوع خدمة العلاج الطبيعي التي تحتاجها؟",
+    fullName: "ما هو اسمك الكريم؟",
+    branch: "أي فرع أنسب لك؟",
+    timing: "متى تفضل الزيارة؟",
+    phone: "ما رقم الهاتف؟",
+  },
+  fallbackReply: "شكرا لتواصلك مع MoveWell.",
   forbiddenClaims: [
     "Do not diagnose medical conditions.",
     "Do not provide treatment advice.",
@@ -50,25 +45,30 @@ const physicalTherapyConfig: BusinessConfig = {
 };
 
 describe("leadExtractor", () => {
-  it("parses valid structured AI JSON content", () => {
+  it("parses valid structured physical therapy AI JSON content", () => {
     const result = parseLeadExtractionContent(
       JSON.stringify({
         fullName: null,
-        phone: "01012345678",
-        serviceRequested: "Telegram bot",
-        budget: "20000 EGP",
-        timeline: "this week",
-        location: null,
-        notes: "Customer asked for a Telegram bot.",
+        phone: "01044440001",
+        serviceRequested: "Back pain physiotherapy",
+        branch: "Nasr City Branch",
+        conditionArea: "lower back",
+        urgency: "urgent",
+        preferredDate: "tomorrow",
+        preferredTime: "evening",
+        contactPreference: "phone call",
+        timeline: "tomorrow",
+        location: "Nasr City Branch",
+        notes: "Customer asked for lower back physiotherapy.",
         intent: "buying",
       }),
     );
 
     expect(result).toMatchObject({
-      phone: "01012345678",
-      serviceRequested: "Telegram bot",
-      budget: "20000 EGP",
-      timeline: "this week",
+      phone: "01044440001",
+      serviceRequested: "Back pain physiotherapy",
+      branch: "Nasr City Branch",
+      preferredDate: "tomorrow",
       intent: "buying",
     });
   });
@@ -76,71 +76,91 @@ describe("leadExtractor", () => {
   it("returns empty fields for malformed or incomplete AI JSON", () => {
     expect(parseLeadExtractionContent("not json")).toEqual({});
     expect(
-      parseLeadExtractionContent('{"serviceRequested":"Website"}'),
+      parseLeadExtractionContent(
+        '{"serviceRequested":"Back pain physiotherapy"}',
+      ),
     ).toEqual({});
   });
 
-  it("extracts Arabic free-text fields with fallback logic", () => {
+  it("extracts Arabic physical therapy free-text with fallback logic", () => {
     const result = fallbackExtractLeadData(
-      "أنا أحمد من القاهرة وعايز بوت تيليجرام خلال أسبوع. الميزانية 15000 جنيه ورقمي 01012345678",
+      "أنا أحمد ومحتاج جلسة علاج طبيعي لأسفل الظهر في فرع مدينة نصر بكرة. رقمي 01044440001",
     );
 
-    expect(result.fullName).toContain("أحمد");
-    expect(result.location).toBeTruthy();
-    expect(result.serviceRequested).toBe("Telegram bot");
-    expect(result.budget).toContain("15000");
-    expect(result.phone).toContain("01012345678");
-    expect(result.intent).toBe("asking");
+    expect(result.fullName).toContain("احمد");
+    expect(result.serviceRequested).toBe("Back pain physiotherapy");
+    expect(result.branch).toBe("Nasr City Branch");
+    expect(result.conditionArea).toBe("back");
+    expect(result.preferredDate).toBe("tomorrow");
+    expect(result.phone).toBe("01044440001");
+    expect(result.intent).toBe("buying");
   });
 
-  it("extracts physical therapy intake without medical advice", async () => {
-    const client = {
-      generateJson: vi.fn().mockResolvedValue({ ok: false }),
-      generateText: vi.fn(),
-    } as unknown as OpenRouterClient;
+  it("extracts mixed English and Arabic therapy intake safely", async () => {
+    const client = createFailingClient();
 
     const result = await extractLeadInfo({
       client,
       messageText:
-        "محتاج جلسة علاج طبيعي لأسفل الظهر في فرع مدينة نصر بكرة. رقمي 01044440001",
+        "Need physiotherapy for neck pain in Maadi next week, please call 01044440005",
       existingFields: {},
-      businessConfig: physicalTherapyConfig,
+      businessConfig,
     });
 
     expect(result.source).toBe("fallback");
-    expect(result.merged.serviceRequested).toBe("Back pain physiotherapy");
-    expect(result.merged.timeline).toBe("بكرة");
-    expect(result.merged.location).toContain("فرع مدينة نصر");
-    expect(result.merged.phone).toBe("01044440001");
-    expect(result.merged.notes).not.toMatch(/تشخيص|تمارين|جلسات لازمة/u);
+    expect(result.merged.serviceRequested).toBe("Neck pain physiotherapy");
+    expect(result.merged.branch).toBe("Maadi Branch");
+    expect(result.merged.preferredDate).toBe("next week");
+    expect(result.merged.phone).toBe("01044440005");
+    expect(result.merged.notes ?? "").not.toMatch(
+      /diagnose|exercise|sessions needed/i,
+    );
+  });
+
+  it("normalizes Arabic variants while extracting branch and timing", () => {
+    const result = fallbackExtractLeadData(
+      "عايزة علاج طبيعي في مدينه نصر بكره واتصلي بيا على 201044440006",
+    );
+
+    expect(result.branch).toBe("Nasr City Branch");
+    expect(result.preferredDate).toBe("tomorrow");
+    expect(result.phone).toBe("01044440006");
   });
 
   it("merges new fields without deleting existing values", () => {
     const merged = mergeLeadFields(
-      { serviceRequested: "Website", timeline: "next month" },
-      { budget: "10000 EGP", intent: "buying" },
+      {
+        serviceRequested: "Back pain physiotherapy",
+        branch: "Nasr City Branch",
+      },
+      { preferredDate: "tomorrow", intent: "buying" },
     );
 
     expect(merged).toEqual({
-      serviceRequested: "Website",
-      timeline: "next month",
-      budget: "10000 EGP",
+      serviceRequested: "Back pain physiotherapy",
+      branch: "Nasr City Branch",
+      preferredDate: "tomorrow",
       intent: "buying",
     });
   });
 
-  it("uses AI output when it matches the lead extraction schema", async () => {
+  it("uses AI output when it matches the physical therapy schema", async () => {
     const generateJson = vi.fn().mockResolvedValue({
       ok: true,
-      schemaName: "LeadExtraction",
+      schemaName: "PhysicalTherapyLeadExtraction",
       data: {
         fullName: null,
-        phone: null,
-        serviceRequested: "Website",
-        budget: null,
-        timeline: "next month",
-        location: "Cairo",
-        notes: "Customer wants a website next month.",
+        phone: "01044440003",
+        serviceRequested: "Sports injury rehabilitation",
+        branch: "New Cairo Branch",
+        conditionArea: "sports injury",
+        urgency: "urgent",
+        preferredDate: "today",
+        preferredTime: "afternoon",
+        contactPreference: "phone call",
+        timeline: "today",
+        location: "New Cairo Branch",
+        notes: "Football injury inquiry.",
         intent: "buying",
       },
       source: "openrouter",
@@ -152,33 +172,38 @@ describe("leadExtractor", () => {
 
     const result = await extractLeadInfo({
       client,
-      messageText: "I need a website next month in Cairo",
+      messageText: "Football injury in New Cairo today, call 01044440003",
       existingFields: {},
       businessConfig,
     });
 
     expect(result.source).toBe("ai");
     expect(result.merged).toMatchObject({
-      serviceRequested: "Website",
-      timeline: "next month",
-      location: "Cairo",
+      serviceRequested: "Sports injury rehabilitation",
+      branch: "New Cairo Branch",
+      preferredDate: "today",
       intent: "buying",
     });
   });
 
-  it("removes AI services that are not configured for the business", async () => {
+  it("removes AI services that are not configured for MoveWell", async () => {
     const generateJson = vi.fn().mockResolvedValue({
       ok: true,
-      schemaName: "LeadExtraction",
+      schemaName: "PhysicalTherapyLeadExtraction",
       data: {
         fullName: null,
         phone: null,
-        serviceRequested: "Dental implants",
-        budget: null,
-        timeline: "this week",
+        serviceRequested: "Hair transplant",
+        branch: null,
+        conditionArea: null,
+        urgency: null,
+        preferredDate: null,
+        preferredTime: null,
+        contactPreference: null,
+        timeline: null,
         location: null,
-        notes: "Customer asked for a dental service.",
-        intent: "buying",
+        notes: "Customer asked for an unsupported service.",
+        intent: "asking",
       },
       source: "openrouter",
     });
@@ -189,7 +214,7 @@ describe("leadExtractor", () => {
 
     const result = await extractLeadInfo({
       client,
-      messageText: "I need dental implants this week",
+      messageText: "I need a hair transplant this week",
       existingFields: {},
       businessConfig,
     });
@@ -202,8 +227,8 @@ describe("leadExtractor", () => {
     const client = {
       generateJson: vi.fn().mockResolvedValue({
         ok: true,
-        schemaName: "LeadExtraction",
-        data: { serviceRequested: "Website" },
+        schemaName: "PhysicalTherapyLeadExtraction",
+        data: { serviceRequested: "Back pain physiotherapy" },
         source: "openrouter",
       }),
       generateText: vi.fn(),
@@ -211,13 +236,57 @@ describe("leadExtractor", () => {
 
     const result = await extractLeadInfo({
       client,
-      messageText: "need website this week budget 5000 EGP",
+      messageText: "need shoulder physiotherapy tomorrow in Maadi 01044440008",
       existingFields: {},
       businessConfig,
     });
 
-    expect(result.source).toBe("fallback");
-    expect(result.merged.serviceRequested).toBe("Website");
-    expect(result.merged.budget).toContain("5000");
+    expect(result.source).toBe("ai");
+    expect(result.merged.serviceRequested).toBe("Shoulder rehabilitation");
+    expect(result.merged.branch).toBe("Maadi Branch");
+  });
+
+  it("keeps memory by filling missing AI fields from fallback extraction", async () => {
+    const client = {
+      generateJson: vi.fn().mockResolvedValue({
+        ok: true,
+        schemaName: "PhysicalTherapyLeadExtraction",
+        data: {
+          fullName: null,
+          phone: null,
+          serviceRequested: null,
+          branch: null,
+          conditionArea: null,
+          urgency: null,
+          preferredDate: null,
+          preferredTime: null,
+          contactPreference: null,
+          timeline: null,
+          location: null,
+          notes: null,
+          intent: "asking",
+        },
+        source: "openrouter",
+      }),
+      generateText: vi.fn(),
+    } as unknown as OpenRouterClient;
+
+    const result = await extractLeadInfo({
+      client,
+      messageText: "عندي مشكلة في الرقبة",
+      existingFields: {},
+      businessConfig,
+    });
+
+    expect(result.source).toBe("ai");
+    expect(result.merged.serviceRequested).toBe("Neck pain physiotherapy");
+    expect(result.merged.conditionArea).toBe("neck");
   });
 });
+
+function createFailingClient(): OpenRouterClient {
+  return {
+    generateJson: vi.fn().mockResolvedValue({ ok: false }),
+    generateText: vi.fn(),
+  } as unknown as OpenRouterClient;
+}

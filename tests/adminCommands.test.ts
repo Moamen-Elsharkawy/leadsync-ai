@@ -13,6 +13,7 @@ import {
 } from "../src/bot/adminCommands.js";
 import type { LeadRecord } from "../src/types/lead.js";
 import type { FollowUpRecord } from "../src/types/message.js";
+import type { SheetsWebAppClient } from "../src/sheets/sheetsWebAppClient.js";
 
 describe("adminCommands", () => {
   it("recognizes only the configured admin Telegram id", () => {
@@ -44,7 +45,7 @@ describe("adminCommands", () => {
     expect(ctx.reply).not.toHaveBeenCalledWith(NON_ADMIN_COMMAND_MESSAGE);
   });
 
-  it("formats latest leads clearly and limits output to 10", () => {
+  it("formats latest physical therapy leads clearly and limits output to 10", () => {
     const leads = Array.from({ length: 12 }, (_, index) =>
       createLead({
         leadId: `lead_${index + 1}`,
@@ -52,19 +53,19 @@ describe("adminCommands", () => {
       }),
     );
 
-    const text = formatLeadList("Latest leads", leads);
+    const text = formatLeadList("Latest intake leads", leads);
 
-    expect(text).toContain("Latest leads (10)");
+    expect(text).toContain("Latest intake leads (10)");
     expect(text).toContain("lead_12");
-    expect(text).toContain("Service:");
-    expect(text).not.toContain("lead_1\n");
+    expect(text).toContain("Branch:");
+    expect(text).not.toContain("Budget:");
   });
 
-  it("formats full lead details", () => {
+  it("formats full therapy lead details", () => {
     const text = formatLeadDetails(createLead({ leadId: "lead_123" }));
 
     expect(text).toContain("Lead details: lead_123");
-    expect(text).toContain("Telegram ID:");
+    expect(text).toContain("Condition area:");
     expect(text).toContain("Notes:");
   });
 
@@ -81,7 +82,7 @@ describe("adminCommands", () => {
     expect(text).not.toContain("fu_sent");
   });
 
-  it("formats report summary", () => {
+  it("formats report summary for the manager", () => {
     const text = formatReportSummary({
       totalLeads: 10,
       hotLeads: 3,
@@ -89,52 +90,15 @@ describe("adminCommands", () => {
       coldLeads: 2,
     });
 
-    expect(text).toContain("Lead report");
-    expect(text).toContain("Hot leads: 3");
+    expect(text).toContain("MoveWell intake report");
+    expect(text).toContain("Urgent leads: 3");
+    expect(text).toContain("Follow-up leads: 5");
   });
 
-  it("seeds demo data for the active business preset", async () => {
-    const { commands, deps } = registerMockedAdminCommands("online-course");
-    const ctx = createContext(123);
 
-    await commands.demo?.(ctx);
-
-    expect(deps.sheets.seedDemoData).toHaveBeenCalledWith("online-course");
-    expect(ctx.reply).toHaveBeenCalledWith(
-      expect.stringContaining("Online Course"),
-    );
-  });
-
-  it("supports explicit dental, course, and physical therapy demo commands", async () => {
-    const { commands, deps } = registerMockedAdminCommands("custom");
-    const ctx = createContext(123);
-
-    await commands.demo_dental?.(ctx);
-    await commands.demo_course?.(ctx);
-    await commands.demo_physical?.(ctx);
-
-    expect(deps.sheets.seedDemoData).toHaveBeenNthCalledWith(
-      1,
-      "dental-clinic",
-    );
-    expect(deps.sheets.seedDemoData).toHaveBeenNthCalledWith(
-      2,
-      "online-course",
-    );
-    expect(deps.sheets.seedDemoData).toHaveBeenNthCalledWith(
-      3,
-      "physical-therapy",
-    );
-  });
 });
 
-function registerMockedAdminCommands(
-  businessPreset:
-    | "custom"
-    | "dental-clinic"
-    | "online-course"
-    | "physical-therapy",
-) {
+function registerMockedAdminCommands() {
   const commands: Record<string, (ctx: Context) => Promise<void>> = {};
   const bot = {
     start: vi.fn(),
@@ -146,17 +110,7 @@ function registerMockedAdminCommands(
   };
   const deps = {
     adminTelegramId: "123",
-    businessPreset,
-    sheets: {
-      setupSheets: vi.fn(),
-      seedDemoData: vi.fn().mockImplementation(async (preset: string) => ({
-        seeded: true,
-        preset,
-        createdLeads: 10,
-        createdMessages: 30,
-      })),
-      clearDemoData: vi.fn(),
-    },
+    sheets: {} as SheetsWebAppClient,
     leadService: {},
     followUpService: {},
     reportService: {},
@@ -181,10 +135,16 @@ function createLead(overrides: Partial<LeadRecord> = {}): LeadRecord {
     telegramUsername: "@customer",
     fullName: "Customer",
     phone: "+201000000000",
-    serviceRequested: "Telegram bot",
-    budget: "15000 EGP",
-    timeline: "this week",
-    location: "Cairo",
+    serviceRequested: "Back pain physiotherapy",
+    branch: "Nasr City Branch",
+    conditionArea: "back",
+    urgency: "urgent",
+    preferredDate: "tomorrow",
+    preferredTime: "evening",
+    contactPreference: "phone call",
+    budget: "",
+    timeline: "tomorrow",
+    location: "Nasr City Branch",
     status: "Hot",
     leadScore: 90,
     stage: "qualified",
@@ -195,7 +155,6 @@ function createLead(overrides: Partial<LeadRecord> = {}): LeadRecord {
     updatedAt: "2026-01-01T00:00:00.000Z",
     followUpCount: 0,
     nextFollowUpAt: "",
-    isDemo: false,
     ...overrides,
   };
 }

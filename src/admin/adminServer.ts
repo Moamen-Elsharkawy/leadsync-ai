@@ -1,10 +1,17 @@
 import type { Server } from "node:http";
+import { randomUUID } from "node:crypto";
 import express, {
   type Express,
   type NextFunction,
   type Request,
   type Response,
 } from "express";
+import { z } from "zod";
+import type { OpenRouterClient } from "../ai/openRouterClient.js";
+import {
+  ManagerChatbotService,
+  managerChatbotQuerySchema,
+} from "../dashboard/managerChatbotService.js";
 import type { SheetsWebAppClient } from "../sheets/sheetsWebAppClient.js";
 import type { FollowUpService } from "../services/followUpService.js";
 import type { LeadService } from "../services/leadService.js";
@@ -18,23 +25,68 @@ export interface AdminServerDeps {
   port: number;
   password: string;
   sheets: SheetsWebAppClient;
+  aiClient: OpenRouterClient;
   leadService: LeadService;
   followUpService: FollowUpService;
   reportService: ReportService;
 }
 
-export function startAdminServer(deps: AdminServerDeps): Server {
-  const app = createAdminApp(deps);
-  const server = app.listen(deps.port, () => {
-    logger.info(`Admin server listening on port ${deps.port}`);
-  });
+const CHATBOT_WINDOW_MS = 60_000;
+const CHATBOT_MAX_REQUESTS_PER_WINDOW = 20;
+const chatbotRateLimitStore = new Map<string, number[]>();
 
-  return server;
+class ChatbotRateLimitError extends Error {}
+
+export async function startAdminServer(deps: AdminServerDeps): Promise<Server> {
+  const app = createAdminApp(deps);
+  const server = app.listen(deps.port);
+
+  return new Promise<Server>((resolve, reject) => {
+    server.once("listening", () => {
+      logger.info(`Admin server listening on port ${deps.port}`);
+      resolve(server);
+    });
+
+    server.once("error", (error) => {
+      if (isAddressInUseError(error)) {
+        logger.error(
+          `Admin server port ${deps.port} is already in use. Stop the process using this port or set a different ADMIN_PORT in .env.`,
+          { error },
+        );
+        reject(
+          new Error(
+            `Admin server failed to start: port ${deps.port} is already in use (EADDRINUSE).`,
+          ),
+        );
+        return;
+      }
+
+      reject(error);
+    });
+  });
 }
 
 export function createAdminApp(deps: AdminServerDeps): Express {
   const app = express();
   app.use(express.json());
+  const managerChatbot = new ManagerChatbotService({
+    sheets: deps.sheets,
+    aiClient: deps.aiClient,
+  });
+
+  app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header(
+      "Access-Control-Allow-Headers",
+      "Origin, X-Requested-With, Content-Type, Accept, Authorization, x-admin-password"
+    );
+    if (req.method === "OPTIONS") {
+      res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH");
+      res.status(200).end();
+      return;
+    }
+    next();
+  });
 
   app.get("/health", (_req, res) => {
     res.json({
@@ -47,7 +99,7 @@ export function createAdminApp(deps: AdminServerDeps): Express {
   app.use(requireAdminPassword(deps.password));
 
   app.get("/", (_req, res) => {
-    res.redirect("/dashboard");
+    res.json({ ok: true, message: "SmartFlow API" });
   });
 
   app.get(
@@ -84,22 +136,41 @@ export function createAdminApp(deps: AdminServerDeps): Express {
     }),
   );
 
-  app.get(
-    "/dashboard",
-    asyncHandler(async (_req, res) => {
-      const [summary, leads] = await Promise.all([
-        deps.reportService.getSummary(),
-        deps.leadService.listLeads(DASHBOARD_LEAD_LIMIT),
-      ]);
 
-      res.type("html").send(renderDashboardHtml({ summary, leads }));
-    }),
-  );
 
   app.get(
     "/followups",
     asyncHandler(async (_req, res) => {
       res.json(await deps.followUpService.listFollowUps("pending"));
+    }),
+  );
+
+  app.post(
+    "/chatbot/query",
+    asyncHandler(async (req, res) => {
+      const sessionId = extractSessionId(req);
+      enforceChatbotRateLimit(sessionId);
+
+      const parsed = managerChatbotQuerySchema.parse({
+        question: req.body?.question,
+        locale: req.body?.locale,
+        requestId:
+          typeof req.body?.requestId === "string" && req.body.requestId.trim()
+            ? req.body.requestId
+            : randomUUID(),
+        sessionId,
+      });
+      logger.info("Processing manager chatbot query", {
+        requestId: parsed.requestId,
+        sessionId: parsed.sessionId,
+      });
+      const response = await managerChatbot.query(parsed);
+      logger.info("Completed manager chatbot query", {
+        requestId: parsed.requestId,
+        refused: response.refused,
+        datasetsUsed: response.provenance.datasetsUsed,
+      });
+      res.json(response);
     }),
   );
 
@@ -110,12 +181,46 @@ export function createAdminApp(deps: AdminServerDeps): Express {
       res: Response,
       _next: NextFunction,
     ): void => {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({
+          ok: false,
+          error: "Invalid chatbot query payload.",
+          details: error.issues.map((issue) => issue.message),
+        });
+        return;
+      }
+      if (error instanceof ChatbotRateLimitError) {
+        res.status(429).json({ ok: false, error: error.message });
+        return;
+      }
       logger.error("Admin server request failed", error);
       res.status(500).json({ ok: false, error: "Internal server error" });
     },
   );
 
   return app;
+}
+
+function extractSessionId(req: Request): string {
+  const headerSessionId = req.header("x-chatbot-session-id");
+  if (headerSessionId?.trim()) {
+    return headerSessionId.trim();
+  }
+  return req.ip || "unknown-session";
+}
+
+function enforceChatbotRateLimit(sessionId: string): void {
+  const now = Date.now();
+  const existing = chatbotRateLimitStore.get(sessionId) ?? [];
+  const recent = existing.filter((timestamp) => now - timestamp < CHATBOT_WINDOW_MS);
+  recent.push(now);
+  chatbotRateLimitStore.set(sessionId, recent);
+
+  if (recent.length > CHATBOT_MAX_REQUESTS_PER_WINDOW) {
+    throw new ChatbotRateLimitError(
+      "Chatbot rate limit reached for this manager session. Please retry shortly.",
+    );
+  }
 }
 
 function requireAdminPassword(password: string) {
@@ -128,11 +233,6 @@ function requireAdminPassword(password: string) {
 
     if ([headerPassword, queryPassword, basicPassword].includes(password)) {
       next();
-      return;
-    }
-
-    if (req.accepts("html")) {
-      res.status(401).type("html").send(renderUnauthorizedHtml());
       return;
     }
 
@@ -182,147 +282,13 @@ async function findLead(
   );
 }
 
-function renderDashboardHtml(input: {
-  summary: {
-    totalLeads: number;
-    hotLeads: number;
-    warmLeads: number;
-    coldLeads: number;
-    demoLeads?: number;
-  };
-  leads: LeadRecord[];
-}): string {
-  const total = Math.max(input.summary.totalLeads, 0);
-  const hotRate =
-    total > 0 ? Math.round((input.summary.hotLeads / total) * 100) : 0;
-  const warmRate =
-    total > 0 ? Math.round((input.summary.warmLeads / total) * 100) : 0;
-  const coldRate =
-    total > 0 ? Math.round((input.summary.coldLeads / total) * 100) : 0;
-
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SmartFlow AI Admin Dashboard</title>
-  <style>
-    :root { color-scheme: light; --bg: #f7f8fa; --panel: #ffffff; --line: #dde3ea; --text: #1f2933; --muted: #607080; --accent: #1565c0; --hot: #b42318; --warm: #a15c07; --cold: #4b5563; }
-    * { box-sizing: border-box; }
-    body { margin: 0; font-family: Arial, Helvetica, sans-serif; background: var(--bg); color: var(--text); }
-    main { max-width: 1180px; margin: 0 auto; padding: 28px 18px 40px; }
-    header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 22px; }
-    h1 { font-size: 26px; margin: 0 0 6px; }
-    h2 { font-size: 18px; margin: 0 0 12px; }
-    p { margin: 0; color: var(--muted); }
-    a { color: var(--accent); text-decoration: none; }
-    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
-    .card, .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
-    .card { padding: 16px; }
-    .card span { color: var(--muted); font-size: 13px; }
-    .card strong { display: block; font-size: 28px; margin-top: 6px; }
-    .panel { padding: 16px; margin-top: 18px; overflow-x: auto; }
-    .summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-    .metric { border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: #fbfcfd; }
-    .metric strong { display: block; margin-top: 4px; }
-    table { width: 100%; border-collapse: collapse; min-width: 860px; }
-    th, td { padding: 11px 10px; border-bottom: 1px solid #e9edf2; text-align: left; font-size: 14px; vertical-align: top; }
-    th { color: var(--muted); font-weight: 600; background: #fbfcfd; }
-    .badge { display: inline-block; min-width: 52px; padding: 4px 8px; border-radius: 999px; font-size: 12px; text-align: center; background: #eef2f6; }
-    .Hot { color: var(--hot); background: #fff1f0; }
-    .Warm { color: var(--warm); background: #fff7e6; }
-    .Cold { color: var(--cold); background: #f3f4f6; }
-    .empty { padding: 18px; color: var(--muted); border: 1px dashed var(--line); border-radius: 8px; background: #fbfcfd; }
-    @media (max-width: 760px) { header { display: block; } .grid, .summary { grid-template-columns: 1fr; } main { padding: 20px 12px; } }
-  </style>
-</head>
-<body>
-<main>
-  <header>
-    <div>
-      <h1>SmartFlow AI Dashboard</h1>
-      <p>Google Sheets CRM view powered by the Apps Script Web App.</p>
-    </div>
-    <p><a href="/health">Health</a> · <a href="/leads">Leads API</a> · <a href="/report">Report API</a></p>
-  </header>
-
-  <section class="grid">
-    ${renderStatCard("Total leads", input.summary.totalLeads)}
-    ${renderStatCard("Hot leads", input.summary.hotLeads, "Hot")}
-    ${renderStatCard("Warm leads", input.summary.warmLeads, "Warm")}
-    ${renderStatCard("Cold leads", input.summary.coldLeads, "Cold")}
-    ${renderStatCard("Demo leads", input.summary.demoLeads ?? 0)}
-  </section>
-
-  <section class="panel">
-    <h2>Basic conversion summary</h2>
-    <div class="summary">
-      ${renderMetric("Hot rate", `${hotRate}%`, "Ready for immediate owner attention")}
-      ${renderMetric("Warm rate", `${warmRate}%`, "Needs follow-up or more qualification")}
-      ${renderMetric("Cold rate", `${coldRate}%`, "Low intent, irrelevant, or incomplete")}
-    </div>
-  </section>
-
-  <section class="panel">
-    <h2>Latest 20 leads</h2>
-    ${renderLeadsTable(input.leads)}
-  </section>
-</main>
-</body>
-</html>`;
+function isAddressInUseError(error: unknown): error is NodeJS.ErrnoException {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as NodeJS.ErrnoException).code === "EADDRINUSE"
+  );
 }
 
-function renderStatCard(label: string, value: number, className = ""): string {
-  return `<div class="card"><span>${escapeHtml(label)}</span><strong class="${className}">${value}</strong></div>`;
-}
 
-function renderMetric(label: string, value: string, note: string): string {
-  return `<div class="metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><p>${escapeHtml(note)}</p></div>`;
-}
-
-function renderLeadsTable(leads: LeadRecord[]): string {
-  if (leads.length === 0) {
-    return `<div class="empty">No leads found yet.</div>`;
-  }
-
-  const rows = leads
-    .slice(0, DASHBOARD_LEAD_LIMIT)
-    .map(
-      (lead) => `<tr>
-        <td><a href="/leads/${encodeURIComponent(lead.leadId)}">${escapeHtml(lead.leadId)}</a></td>
-        <td><span class="badge ${escapeHtml(lead.status)}">${escapeHtml(lead.status)}</span></td>
-        <td>${lead.leadScore}</td>
-        <td>${escapeHtml(valueOrDash(lead.serviceRequested))}</td>
-        <td>${escapeHtml(valueOrDash(lead.fullName))}</td>
-        <td>${escapeHtml(valueOrDash(lead.phone || lead.telegramUsername))}</td>
-        <td>${escapeHtml(valueOrDash(lead.timeline))}</td>
-        <td>${escapeHtml(valueOrDash(lead.budget))}</td>
-        <td>${escapeHtml(valueOrDash(lead.updatedAt))}</td>
-      </tr>`,
-    )
-    .join("");
-
-  return `<table>
-    <thead>
-      <tr><th>ID</th><th>Status</th><th>Score</th><th>Service</th><th>Name</th><th>Contact</th><th>Timeline</th><th>Budget</th><th>Updated</th></tr>
-    </thead>
-    <tbody>${rows}</tbody>
-  </table>`;
-}
-
-function renderUnauthorizedHtml(): string {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Unauthorized</title></head><body><main style="font-family: Arial, sans-serif; max-width: 640px; margin: 40px auto;"><h1>Unauthorized</h1><p>Add <code>?password=ADMIN_PASSWORD</code> to the URL, send <code>x-admin-password</code>, or use Basic auth.</p></main></body></html>`;
-}
-
-function valueOrDash(value: string | undefined | null): string {
-  return value && value.trim() ? value : "-";
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}

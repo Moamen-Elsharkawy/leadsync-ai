@@ -9,10 +9,11 @@ import type {
 import { nowIso } from "../utils/date.js";
 
 export type QualificationField =
+  | "fullName"
   | "serviceRequested"
+  | "branch"
   | "timeline"
-  | "budget"
-  | "contact";
+  | "phone";
 
 export interface QualificationQuestion {
   field: QualificationField;
@@ -20,17 +21,34 @@ export interface QualificationQuestion {
 }
 
 const DEFAULT_QUESTIONS: Record<QualificationField, string> = {
-  serviceRequested: "ما الخدمة التي تحتاجها بالتحديد؟",
-  timeline: "متى تحتاج تنفيذ هذه الخدمة؟",
-  budget: "ما الميزانية المتوقعة لهذه الخدمة؟",
-  contact: "ما أفضل رقم هاتف أو طريقة تواصل مناسبة لك؟",
+  fullName: "تقدر تقولي اسمك الكريم عشان أسجل الطلب باسمك؟",
+  serviceRequested:
+    "تحب أساعدك في أي خدمة علاج طبيعي؟ مثلا الظهر، الرقبة، الركبة، إصابة ملاعب، تأهيل بعد عملية، أو جلسة منزلية.",
+  branch: "أنسب فرع لك إيه: مدينة نصر، المعادي، ولا التجمع؟",
+  timeline: "تحب الزيارة أو تواصل فريق الاستقبال يكون إمتى تقريبا؟",
+  phone:
+    "لو تحب مكالمة من فريق الاستقبال، ابعت رقم موبايل مناسب. أو نقدر نكمل معاك هنا على تليجرام.",
 };
 
 const REPEATED_QUESTIONS: Record<QualificationField, string> = {
-  serviceRequested: "حتى أساعدك بدقة، ما نوع الخدمة المطلوبة؟",
-  timeline: "ما الموعد التقريبي الذي يناسبك للبدء؟",
-  budget: "إذا لم يكن لديك رقم محدد، ما نطاق الميزانية المتوقع؟",
-  contact: "ما وسيلة التواصل المفضلة لديك للمتابعة؟",
+  fullName:
+    "عشان أسجل طلبك بشكل صحيح لفريق الاستقبال، محتاج اسمك الكامل لو سمحت.",
+  serviceRequested:
+    "عشان أوصل طلبك للفريق الصح، محتاج أعرف نوع استفسار العلاج الطبيعي المطلوب.",
+  branch: "أي فرع أقرب لك من فروع MoveWell: مدينة نصر، المعادي، ولا التجمع؟",
+  timeline: "ما الوقت التقريبي المناسب للزيارة أو تواصل فريق الاستقبال؟",
+  phone:
+    "لو مناسب، ابعت رقم للتواصل أو قول لنا إنك تفضل المتابعة هنا على تليجرام.",
+};
+
+const THIRD_ASK_QUESTIONS: Record<QualificationField, string> = {
+  fullName: "ممكن اسمك لو سمحت عشان نسجل الطلب؟",
+  serviceRequested:
+    "قولي بس إيه اللي محتاج مساعدة فيه وأنا هوصل الطلب للمختص.",
+  branch: "لو مش متأكد من الفرع، قولي المنطقة القريبة منك وأنا أرشح لك.",
+  timeline:
+    "لو مش متأكد من الوقت، ممكن فريق الاستقبال يتواصل معاك يقترح مواعيد.",
+  phone: "لا مشكلة لو مش عايز تشارك رقم، نقدر نكمل هنا على تليجرام.",
 };
 
 export class SessionService {
@@ -48,6 +66,7 @@ export class SessionService {
       currentStep: "new",
       collectedFields: {},
       lastQuestionAsked: "",
+      questionAskCount: 0,
       lastMessageAt: timestamp,
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -65,11 +84,11 @@ export function isLeadQualified(
 ): boolean {
   return Boolean(
     fields.serviceRequested &&
-    (fields.timeline || fields.budget) &&
-    (contact.telegramUsername ||
-      contact.phone ||
-      contact.telegramUserId ||
-      fields.phone),
+      (fields.timeline || fields.preferredDate || fields.urgency) &&
+      (contact.telegramUsername ||
+        contact.phone ||
+        contact.telegramUserId ||
+        fields.phone),
   );
 }
 
@@ -94,39 +113,60 @@ export function selectNextQualificationQuestion(
   contact: LeadContactContext,
   businessConfig: BusinessConfig,
   lastQuestionAsked = "",
+  questionAskCount = 0,
 ): QualificationQuestion | null {
+  // Ask for service first — this is the most important field
   if (!fields.serviceRequested) {
     return buildQuestion(
       "serviceRequested",
       businessConfig.qualificationQuestions.serviceRequested ||
         DEFAULT_QUESTIONS.serviceRequested,
       lastQuestionAsked,
+      questionAskCount,
     );
   }
 
-  if (!fields.timeline && !fields.budget) {
-    const lastWasTimeline =
-      lastQuestionAsked === DEFAULT_QUESTIONS.timeline ||
-      lastQuestionAsked === REPEATED_QUESTIONS.timeline;
-    return lastWasTimeline
-      ? buildQuestion("budget", DEFAULT_QUESTIONS.budget, lastQuestionAsked)
-      : buildQuestion(
-          "timeline",
-          DEFAULT_QUESTIONS.timeline,
-          lastQuestionAsked,
-        );
+  // Ask for name — important for reception team
+  if (!fields.fullName) {
+    return buildQuestion(
+      "fullName",
+      businessConfig.qualificationQuestions.fullName ||
+        DEFAULT_QUESTIONS.fullName,
+      lastQuestionAsked,
+      questionAskCount,
+    );
   }
 
-  if (
-    !contact.telegramUserId &&
-    !contact.telegramUsername &&
-    !contact.phone &&
-    !fields.phone
-  ) {
+  // Ask for branch
+  if (!fields.branch && !fields.location) {
     return buildQuestion(
-      "contact",
-      businessConfig.qualificationQuestions.phone || DEFAULT_QUESTIONS.contact,
+      "branch",
+      businessConfig.qualificationQuestions.branch || DEFAULT_QUESTIONS.branch,
       lastQuestionAsked,
+      questionAskCount,
+    );
+  }
+
+  // Ask for timing
+  if (!fields.timeline && !fields.preferredDate && !fields.urgency) {
+    return buildQuestion(
+      "timeline",
+      businessConfig.qualificationQuestions.timing ||
+        businessConfig.qualificationQuestions.budgetOrTimeline ||
+        DEFAULT_QUESTIONS.timeline,
+      lastQuestionAsked,
+      questionAskCount,
+    );
+  }
+
+  // Ask for phone — but only if we don't have ANY contact method.
+  // Since we always have telegramUserId, phone is optional but helpful.
+  if (!fields.phone && !contact.phone) {
+    return buildQuestion(
+      "phone",
+      businessConfig.qualificationQuestions.phone || DEFAULT_QUESTIONS.phone,
+      lastQuestionAsked,
+      questionAskCount,
     );
   }
 
@@ -137,12 +177,19 @@ function buildQuestion(
   field: QualificationField,
   question: string,
   lastQuestionAsked: string,
+  questionAskCount: number,
 ): QualificationQuestion {
-  return {
-    field,
-    question:
-      lastQuestionAsked === question ? REPEATED_QUESTIONS[field] : question,
-  };
+  // 3rd+ time asking the same field — use softer phrasing
+  if (lastQuestionAsked === REPEATED_QUESTIONS[field] && questionAskCount >= 2) {
+    return { field, question: THIRD_ASK_QUESTIONS[field] };
+  }
+
+  // 2nd time asking the same question — use alternate phrasing
+  if (lastQuestionAsked === question) {
+    return { field, question: REPEATED_QUESTIONS[field] };
+  }
+
+  return { field, question };
 }
 
 export function recordToSessionState(record: SessionRecord): SessionState {
@@ -151,6 +198,7 @@ export function recordToSessionState(record: SessionRecord): SessionState {
     currentStep: normalizeStep(record.currentStep),
     collectedFields: parseCollectedFields(record.collectedFieldsJson),
     lastQuestionAsked: record.lastQuestionAsked ?? "",
+    questionAskCount: Number(record.questionAskCount) || 0,
     lastMessageAt: record.lastMessageAt ?? nowIso(),
     createdAt: record.createdAt ?? nowIso(),
     updatedAt: record.updatedAt ?? nowIso(),
@@ -163,6 +211,7 @@ export function sessionStateToRecord(session: SessionState): SessionRecord {
     currentStep: session.currentStep,
     collectedFieldsJson: JSON.stringify(session.collectedFields),
     lastQuestionAsked: session.lastQuestionAsked,
+    questionAskCount: session.questionAskCount,
     lastMessageAt: session.lastMessageAt,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,

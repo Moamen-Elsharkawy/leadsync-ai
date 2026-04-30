@@ -8,13 +8,14 @@ import type {
   MessageRecord,
   ReportRecord,
 } from "../types/message.js";
-import type { BusinessPreset } from "../config/businessConfig.js";
 
 const DEFAULT_TIMEOUT_MS = 30000;
 const DEFAULT_MAX_RETRIES = 2;
+const DEMO_DATA_TIMEOUT_MS = 120000;
 
 export type SheetsAction =
   | "initSecret"
+  | "diagnostics"
   | "setup"
   | "appendMessage"
   | "upsertSession"
@@ -68,7 +69,7 @@ export interface ReportSummary {
 
 export interface SeedDemoDataResult {
   seeded: boolean;
-  preset?: BusinessPreset | "custom";
+  preset?: "physical-therapy";
   createdLeads?: number;
   createdMessages?: number;
 }
@@ -76,6 +77,27 @@ export interface SeedDemoDataResult {
 export interface ClearDemoDataResult {
   cleared: boolean;
   deletedRows?: number;
+}
+
+export interface AppsScriptDiagnosticsResult {
+  ok: boolean;
+  version: string;
+  spreadsheetName: string;
+  secretInitialized: boolean;
+  actions: string[];
+  tabs: Record<
+    string,
+    {
+      exists: boolean;
+      rowCount: number;
+      columnCount: number;
+      missingHeaders?: string[];
+    }
+  >;
+  missingTabs: string[];
+  missingHeaders: Record<string, string[]>;
+  needsSetup: boolean;
+  timestamp: string;
 }
 
 export interface MessageFilters {
@@ -132,7 +154,7 @@ const setupSheetsResultSchema = z.object({
   preservedExistingData: z.boolean().optional(),
 });
 const initSecretResultSchema = z.object({
-  initialized: z.boolean(),
+  initialized: z.boolean().optional(),
   propertyKey: z.string().optional(),
 });
 const reportSummarySchema = z.object({
@@ -145,15 +167,32 @@ const reportSummarySchema = z.object({
 });
 const seedDemoDataResultSchema = z.object({
   seeded: z.boolean(),
-  preset: z
-    .enum(["custom", "dental-clinic", "online-course", "physical-therapy"])
-    .optional(),
+  preset: z.literal("physical-therapy").optional(),
   createdLeads: z.number().optional(),
   createdMessages: z.number().optional(),
 });
 const clearDemoDataResultSchema = z.object({
   cleared: z.boolean(),
   deletedRows: z.number().optional(),
+});
+const appsScriptDiagnosticsResultSchema = z.object({
+  ok: z.boolean(),
+  version: z.string(),
+  spreadsheetName: z.string(),
+  secretInitialized: z.boolean(),
+  actions: z.array(z.string()),
+  tabs: z.record(
+    z.object({
+      exists: z.boolean(),
+      rowCount: z.number(),
+      columnCount: z.number(),
+      missingHeaders: z.array(z.string()).optional(),
+    }),
+  ),
+  missingTabs: z.array(z.string()),
+  missingHeaders: z.record(z.array(z.string())),
+  needsSetup: z.boolean(),
+  timestamp: z.string(),
 });
 const settingSchema = z.object({
   key: z.string(),
@@ -205,11 +244,20 @@ export class SheetsWebAppClient {
   }
 
   initSecret(): Promise<InitSecretResult> {
-    return this.request("initSecret", {}, initSecretResultSchema);
+    return this.request("initSecret", {}, initSecretResultSchema).then(
+      (result) => ({
+        initialized: result.initialized ?? true,
+        propertyKey: result.propertyKey,
+      }),
+    );
   }
 
   setupSheets(): Promise<SetupSheetsResult> {
     return this.request("setup", {}, setupSheetsResultSchema);
+  }
+
+  diagnostics(): Promise<AppsScriptDiagnosticsResult> {
+    return this.request("diagnostics", {}, appsScriptDiagnosticsResultSchema);
   }
 
   setup(): Promise<SetupSheetsResult> {
@@ -328,24 +376,25 @@ export class SheetsWebAppClient {
     );
   }
 
-  seedDemoData(preset?: BusinessPreset): Promise<SeedDemoDataResult> {
-    return this.request(
-      "seedDemoData",
-      preset ? { preset } : {},
-      seedDemoDataResultSchema,
-    );
+  seedDemoData(): Promise<SeedDemoDataResult> {
+    return this.request("seedDemoData", {}, seedDemoDataResultSchema, {
+      timeoutMs: DEMO_DATA_TIMEOUT_MS,
+    });
   }
 
   clearDemoData(): Promise<ClearDemoDataResult> {
-    return this.request("clearDemoData", {}, clearDemoDataResultSchema);
+    return this.request("clearDemoData", {}, clearDemoDataResultSchema, {
+      timeoutMs: DEMO_DATA_TIMEOUT_MS,
+    });
   }
 
   async request<T>(
     action: SheetsAction,
     payload: Record<string, unknown> = {},
     schema?: z.ZodType<T>,
+    options: { timeoutMs?: number } = {},
   ): Promise<T> {
-    const data = await this.post(action, payload);
+    const data = await this.post(action, payload, options.timeoutMs);
     return schema ? schema.parse(data) : (data as T);
   }
 
@@ -381,6 +430,7 @@ export class SheetsWebAppClient {
   private async post(
     action: SheetsAction,
     payload: Record<string, unknown>,
+    timeoutMs = this.timeoutMs,
   ): Promise<unknown> {
     const requestBody: SheetsRequestBody = {
       action,
@@ -392,7 +442,7 @@ export class SheetsWebAppClient {
 
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
-        return await this.sendOnce(requestBody);
+        return await this.sendOnce(requestBody, timeoutMs);
       } catch (error) {
         lastError = error;
 
@@ -413,11 +463,14 @@ export class SheetsWebAppClient {
     );
   }
 
-  private async sendOnce(requestBody: SheetsRequestBody): Promise<unknown> {
+  private async sendOnce(
+    requestBody: SheetsRequestBody,
+    timeoutMs: number,
+  ): Promise<unknown> {
     const controller = new AbortController();
     const timeout = setTimeout(() => {
       controller.abort();
-    }, this.timeoutMs);
+    }, timeoutMs);
 
     try {
       const response = await this.fetchImpl(this.webAppUrl, {
@@ -450,7 +503,7 @@ export class SheetsWebAppClient {
     } catch (error) {
       if (isAbortError(error)) {
         throw createSheetsError(
-          `Apps Script request timed out after ${this.timeoutMs}ms.`,
+          `Apps Script request timed out after ${timeoutMs}ms.`,
           408,
           "TIMEOUT",
         );

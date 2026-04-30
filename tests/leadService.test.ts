@@ -3,26 +3,25 @@ import { buildLeadRecord } from "../src/services/leadService.js";
 import type { LeadClassification, LeadFields } from "../src/types/lead.js";
 
 describe("leadService", () => {
-  it("marks newly created leads as demo leads when demo mode is active", () => {
+  it("creates a new lead with provided fields and classification", () => {
     const lead = buildLeadRecord({
       telegramUserId: "123",
-      telegramUsername: "@demo_customer",
+      telegramUsername: "@customer",
       fields: createFields(),
       classification: createClassification(),
       latestMessageText: "I need a Telegram bot this week.",
-      isDemo: true,
     });
 
-    expect(lead.isDemo).toBe(true);
+    expect(lead.status).toBe("Hot");
+    expect(lead.budget).toBe("25000 EGP");
   });
 
-  it("preserves an existing demo flag when later updates omit the demo flag", () => {
+  it("merges updates into an existing lead", () => {
     const existingLead = buildLeadRecord({
       telegramUserId: "123",
       fields: createFields(),
       classification: createClassification(),
       latestMessageText: "Initial message",
-      isDemo: true,
     });
 
     const updatedLead = buildLeadRecord({
@@ -33,8 +32,8 @@ describe("leadService", () => {
       latestMessageText: "Budget is 40000 EGP.",
     });
 
-    expect(updatedLead.isDemo).toBe(true);
     expect(updatedLead.budget).toBe("40000 EGP");
+    expect(updatedLead.leadId).toBe(existingLead.leadId);
   });
 });
 

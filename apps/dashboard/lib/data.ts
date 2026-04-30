@@ -13,13 +13,15 @@ export function getDashboardService(): DashboardDataService {
   const sheets = new SheetsWebAppClient({
     webAppUrl: env.googleSheetsWebAppUrl,
     secret: env.googleSheetsWebAppSecret,
+    timeoutMs: 15000,
+    maxRetries: 1,
   });
   const businessConfig = loadBusinessConfig(
     path.resolve(rootDir, resolveBusinessConfigPath(env.businessPreset)),
   );
 
   return new DashboardDataService(sheets, businessConfig, {
-    demoMode: env.demoMode,
+
     businessPreset: env.businessPreset,
     botMode: env.botMode,
     envPresence: env.envPresence,

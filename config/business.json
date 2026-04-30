@@ -1,42 +1,53 @@
 {
-  "businessName": "SmartFlow Demo Business",
-  "businessType": "AI automation studio",
+  "businessName": "MoveWell Physical Therapy Centers",
+  "businessType": "physical therapy center",
+  "language": "ar",
+  "branches": ["Nasr City Branch", "Maadi Branch", "New Cairo Branch"],
   "services": [
-    "AI automation",
-    "Telegram sales bot",
-    "Google Sheets CRM setup",
-    "Landing page",
-    "Marketing automation"
+    "Back pain physiotherapy",
+    "Neck pain physiotherapy",
+    "Sports injury rehabilitation",
+    "Post-surgery rehabilitation",
+    "Knee pain treatment",
+    "Shoulder rehabilitation",
+    "Pediatric physiotherapy consultation",
+    "Manual therapy inquiry",
+    "Posture correction",
+    "Home physiotherapy session"
   ],
   "workingHours": {
     "timezone": "Africa/Cairo",
     "weekly": {
-      "Sunday": "10:00-18:00",
-      "Monday": "10:00-18:00",
-      "Tuesday": "10:00-18:00",
-      "Wednesday": "10:00-18:00",
-      "Thursday": "10:00-18:00"
+      "saturday": "10:00 - 20:00",
+      "sunday": "10:00 - 20:00",
+      "monday": "10:00 - 20:00",
+      "tuesday": "10:00 - 20:00",
+      "wednesday": "10:00 - 20:00",
+      "thursday": "10:00 - 18:00",
+      "friday": "Closed"
     }
   },
-  "tone": "professional, concise, helpful",
-  "language": "ar",
+  "tone": "professional, concise, helpful, warm Egyptian dialect",
   "defaultCurrency": "EGP",
-  "unavailableDays": ["Friday", "Saturday"],
+  "unavailableDays": ["Friday"],
   "adminContact": {
-    "name": "Sales Manager",
-    "phone": "+201000000000",
-    "email": "sales@example.com",
-    "telegram": "@smartflow_admin"
+    "name": "MoveWell Reception",
+    "phone": "+20-xxx-xxx-xxxx",
+    "telegram": "@movewell_admin"
   },
   "qualificationQuestions": {
-    "serviceRequested": "ما الخدمة التي تحتاجها بالتحديد؟",
-    "budgetOrTimeline": "ما الميزانية المتوقعة أو الموعد المطلوب لتنفيذ الخدمة؟",
-    "phone": "هل يمكنك إرسال رقم هاتف أو طريقة تواصل مفضلة حتى يتابع معك المسؤول؟"
+    "fullName": "تقدر تقولي اسمك الكريم عشان أسجل الطلب باسمك؟",
+    "serviceRequested": "تحب أساعدك في أي خدمة علاج طبيعي؟ مثلا الظهر، الرقبة، الركبة، إصابة ملاعب، تأهيل بعد عملية، أو جلسة منزلية.",
+    "branch": "أنسب فرع لك إيه: مدينة نصر، المعادي، ولا التجمع؟",
+    "timing": "تحب الزيارة أو تواصل فريق الاستقبال يكون إمتى تقريبا؟",
+    "phone": "لو تحب مكالمة من فريق الاستقبال، ابعت رقم موبايل مناسب. أو نقدر نكمل معاك هنا على تليجرام."
   },
   "forbiddenClaims": [
-    "Do not promise fixed prices before admin review.",
-    "Do not guarantee launch dates before admin approval.",
-    "Do not confirm bookings or appointments automatically."
+    "Do not diagnose any medical condition or suggest exercises or medications.",
+    "Do not estimate the number of sessions the patient needs.",
+    "Do not guarantee treatment outcomes or recovery timelines.",
+    "Do not quote final prices; the reception team confirms pricing.",
+    "Do not confirm appointments before staff review."
   ],
-  "fallbackReply": "شكرا لتواصلك معنا. سأجمع بعض التفاصيل السريعة حتى أساعدك بشكل أفضل."
+  "fallbackReply": "شكرا لتواصلك مع MoveWell. هسجل التفاصيل الأساسية لفريق الاستقبال عشان يراجع طلبك ويتواصل معاك، بدون تشخيص أو نصيحة علاجية داخل المحادثة."
 }

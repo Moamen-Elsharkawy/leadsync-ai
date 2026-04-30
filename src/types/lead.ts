@@ -17,6 +17,12 @@ export interface LeadFields {
   fullName?: string;
   phone?: string;
   serviceRequested?: string;
+  branch?: string;
+  conditionArea?: string;
+  urgency?: string;
+  preferredDate?: string;
+  preferredTime?: string;
+  contactPreference?: string;
   budget?: string;
   timeline?: string;
   location?: string;
@@ -31,6 +37,12 @@ export interface LeadRecord extends LeadFields {
   fullName: string;
   phone: string;
   serviceRequested: string;
+  branch?: string;
+  conditionArea?: string;
+  urgency?: string;
+  preferredDate?: string;
+  preferredTime?: string;
+  contactPreference?: string;
   budget: string;
   timeline: string;
   location: string;
@@ -44,7 +56,6 @@ export interface LeadRecord extends LeadFields {
   updatedAt: string;
   followUpCount: number;
   nextFollowUpAt: string;
-  isDemo: boolean;
 }
 
 export interface LeadContactContext {

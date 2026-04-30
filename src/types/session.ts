@@ -7,6 +7,7 @@ export interface SessionRecord {
   currentStep: SessionStep;
   collectedFieldsJson: string;
   lastQuestionAsked: string;
+  questionAskCount: number;
   lastMessageAt: string;
   createdAt: string;
   updatedAt: string;
@@ -17,6 +18,7 @@ export interface SessionState {
   currentStep: SessionStep;
   collectedFields: LeadFields;
   lastQuestionAsked: string;
+  questionAskCount: number;
   lastMessageAt: string;
   createdAt: string;
   updatedAt: string;

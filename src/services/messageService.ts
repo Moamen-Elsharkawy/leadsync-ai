@@ -24,4 +24,14 @@ export class MessageService {
 
     return this.sheets.appendMessage(message);
   }
+
+  async listRecentMessages(
+    telegramUserId: string,
+    limit = 10,
+  ): Promise<MessageRecord[]> {
+    const messages = await this.sheets.listMessages({ telegramUserId });
+    return messages
+      .sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt))
+      .slice(-Math.max(1, limit));
+  }
 }

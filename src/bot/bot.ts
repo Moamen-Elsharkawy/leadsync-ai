@@ -29,7 +29,6 @@ export function createBot(deps: BotDeps): Telegraf {
 
   registerAdminCommands(bot, {
     adminTelegramId: deps.env.ADMIN_TELEGRAM_ID,
-    businessPreset: deps.env.BUSINESS_PRESET,
     sheets: deps.sheets,
     leadService: deps.leadService,
     followUpService: deps.followUpService,
@@ -44,7 +43,6 @@ export function createBot(deps: BotDeps): Telegraf {
     leadService: deps.leadService,
     followUpService: deps.followUpService,
     adminTelegramId: deps.env.ADMIN_TELEGRAM_ID,
-    demoMode: deps.env.DEMO_MODE,
   });
 
   bot.catch((error) => {

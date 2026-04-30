@@ -1,6 +1,14 @@
-import { LeadsTable, Section } from "../../../components/ui";
+import {
+  DashboardDataError,
+  LeadsTable,
+  Section,
+} from "../../../components/ui";
 import { getDashboardService } from "../../../lib/data";
 import type { LeadStage, LeadStatus } from "@smartflow/types/lead";
+import {
+  classifyDashboardError,
+  dashboardErrorFromCode,
+} from "@smartflow/dashboard/errors";
 
 export default async function LeadsPage({
   searchParams,
@@ -9,31 +17,45 @@ export default async function LeadsPage({
 }) {
   const params = await searchParams;
   const service = getDashboardService();
-  const leads = await service.getLeads({
-    search: params.search,
-    status: parseLeadStatus(params.status),
-    stage: parseLeadStage(params.stage),
-    serviceRequested: params.service,
-    isDemo: parseDemo(params.demo),
-    sortBy:
-      params.sort === "createdAt" || params.sort === "leadScore"
-        ? params.sort
-        : "updatedAt",
-    sortDirection: params.dir === "asc" ? "asc" : "desc",
-    limit: Number(params.limit || 50),
-  });
+  const loaded = await service
+    .getLeads({
+      search: params.search,
+      status: parseLeadStatus(params.status),
+      stage: parseLeadStage(params.stage),
+      serviceRequested: params.service,
+      sortBy:
+        params.sort === "createdAt" || params.sort === "leadScore"
+          ? params.sort
+          : "updatedAt",
+      sortDirection: params.dir === "asc" ? "asc" : "desc",
+      limit: Number(params.limit || 50),
+    })
+    .then((leads) => ({ ok: true as const, leads }))
+    .catch((error) => ({ ok: false as const, error }));
+
+  if (!loaded.ok) {
+    const error = classifyDashboardError(loaded.error);
+    return (
+      <DashboardDataError title={error.title} description={error.description} />
+    );
+  }
+
+  const leads = loaded.leads;
+  const actionError = params.error
+    ? dashboardErrorFromCode(params.error)
+    : null;
 
   return (
     <>
       <div>
-        <h1 className="text-2xl font-semibold text-ink">Leads</h1>
+        <h1 className="text-2xl font-semibold text-ink">Intake leads</h1>
         <p className="mt-1 text-muted">
-          Search, filter, sort, and open complete lead records.
+          Search, filter, sort, and open complete therapy intake records.
         </p>
       </div>
 
       <Section
-        title="Lead pipeline"
+        title="Therapy intake pipeline"
         action={
           <a
             href="/leads"
@@ -43,10 +65,18 @@ export default async function LeadsPage({
           </a>
         }
       >
+        {actionError ? (
+          <div className="mb-4">
+            <DashboardDataError
+              title={actionError.title}
+              description={actionError.description}
+            />
+          </div>
+        ) : null}
         <form className="mb-4 grid gap-3 md:grid-cols-6">
           <input
             name="search"
-            placeholder="Search name, phone, service, notes"
+            placeholder="Search name, phone, service, branch, notes"
             defaultValue={params.search}
             className="rounded-md border border-line px-3 py-2 md:col-span-2"
           />
@@ -60,15 +90,7 @@ export default async function LeadsPage({
             <option value="Warm">Warm</option>
             <option value="Cold">Cold</option>
           </select>
-          <select
-            name="demo"
-            defaultValue={params.demo || "all"}
-            className="rounded-md border border-line px-3 py-2"
-          >
-            <option value="all">All data</option>
-            <option value="true">Demo only</option>
-            <option value="false">Real only</option>
-          </select>
+
           <select
             name="sort"
             defaultValue={params.sort || "updatedAt"}
@@ -107,14 +129,3 @@ function parseLeadStage(value: string | undefined): LeadStage | "all" {
     : "all";
 }
 
-function parseDemo(value: string | undefined) {
-  if (value === "true") {
-    return true;
-  }
-
-  if (value === "false") {
-    return false;
-  }
-
-  return "all";
-}
