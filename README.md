@@ -1,8 +1,8 @@
-# SmartFlow Physical Therapy Intake System
+# LeadSync AI - Telegram Sales Agent + Google Sheets CRM
 
-SmartFlow is a production-ready MVP for physical therapy centers. Customers send inquiries through Telegram, the AI assistant replies in Arabic, and the center manager reviews intake leads, conversations, follow-ups, and reports from a professional web dashboard.
+LeadSync AI is a production AI lead-management system: customers send inquiries through Telegram, the AI assistant replies in Arabic, qualifies and classifies every lead, and the manager reviews intake leads, conversations, follow-ups, and reports from a professional web dashboard.
 
-The demo business is **MoveWell Physical Therapy Centers** with branches in Nasr City, Maadi, and New Cairo.
+This repository contains the demo deployment, branded as **SmartFlow / MoveWell Physical Therapy Centers** (a sample physiotherapy business with branches in Nasr City, Maadi, and New Cairo). The same system adapts to any service business that takes inquiries over chat.
 
 ## What It Does
 
