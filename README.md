@@ -1,10 +1,20 @@
-# LeadSync AI - Telegram Sales Agent + Google Sheets CRM
+# LeadSync AI
+
+A Telegram sales agent plus Google Sheets CRM that captures, qualifies, and follows up Arabic-language leads for service businesses.
+
+![LeadSync AI](https://raw.githubusercontent.com/Moamen-Elsharkawy/portfolio-assets/main/covers/leadsync-ai.png)
+
+**[Watch the demo](https://youtu.be/eacYf0uX2gM)**
 
 LeadSync AI is a production AI lead-management system: customers send inquiries through Telegram, the AI assistant replies in Arabic, qualifies and classifies every lead, and the manager reviews intake leads, conversations, follow-ups, and reports from a professional web dashboard.
 
 This repository contains the demo deployment, branded as **SmartFlow / MoveWell Physical Therapy Centers** (a sample physiotherapy business with branches in Nasr City, Maadi, and New Cairo). The same system adapts to any service business that takes inquiries over chat.
 
-## What It Does
+## The problem
+
+Service businesses lose leads when chat inquiries pile up: replies are slow, intake details are collected inconsistently, and follow-ups fall through the cracks. Sorting hot prospects from cold ones by hand across many conversations is slow and easy to get wrong. LeadSync AI answers every inquiry instantly in Arabic, captures the intake details, scores each lead, and gives the manager one place to review conversations, follow-ups, and reports.
+
+## What it does
 
 - Collects physical therapy intake details from Telegram conversations.
 - Extracts service, branch, condition area, urgency, preferred date/time, phone, and contact preference.
@@ -15,6 +25,20 @@ This repository contains the demo deployment, branded as **SmartFlow / MoveWell 
 
 ## Architecture
 
+```mermaid
+flowchart TD
+    Customer([Customer]) -->|Arabic inquiry| Telegram[Telegram]
+    Telegram --> Bot[Node.js Telegraf bot in polling mode]
+    Bot -->|extract intake fields and classify| OpenRouter[OpenRouter AI]
+    OpenRouter -->|reply, or deterministic fallback on failure| Bot
+    Bot -->|asks for missing data, one question at a time| Telegram
+    Cron[node-cron scheduler] -->|triggers follow-ups| Bot
+    Bot -->|HTTP POST, the only storage path| WebApp[Google Apps Script Web App]
+    WebApp --> Sheets[(Google Sheets CRM)]
+    Manager([Center manager]) --> Dashboard[Next.js dashboard]
+    Dashboard -->|reads and actions| WebApp
+```
+
 - Telegram is the customer messaging channel.
 - OpenRouter is the only AI provider.
 - Google Sheets is the CRM/storage layer.
@@ -23,7 +47,7 @@ This repository contains the demo deployment, branded as **SmartFlow / MoveWell 
 
 No database, SQLite, Prisma, Postgres, Supabase, Airtable, Firebase, Google Cloud service account, Google Sheets API credentials, or credentials JSON are used.
 
-## Tech Stack
+## Stack
 
 - Node.js + TypeScript
 - Telegraf
@@ -271,3 +295,7 @@ You must copy the updated `google-apps-script/Code.gs` into Apps Script and rede
 - `docs/manual-qa-checklist.md`
 - `docs/case-study.md`
 - `docs/ui-quality-guidelines.md`
+
+## License
+
+Released under the MIT License. See [LICENSE](LICENSE).
